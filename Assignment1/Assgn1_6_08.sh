@@ -19,7 +19,7 @@ done
 
 while read p
 do
-    for (( i=2;i<=$p;i++))
+    for (( i=2;i<=$p;i++ ))
     do 
         if [ ${prime[i]} -eq 1 ]
         then
