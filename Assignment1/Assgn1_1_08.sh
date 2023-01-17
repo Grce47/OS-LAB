@@ -5,6 +5,8 @@ ans=1
 while read p
 do
     tmp=$( echo $p | rev )
-    ans=$(( ans * tmp / $( gcd $ans $tmp ) ))
+    mult=$(bc<<<"$ans*$tmp")
+    gc=$(bc<<<"$( gcd $ans $tmp )")  
+    ans=$(bc<<<"$mult/$gc")
 done < $1
 echo $ans
