@@ -18,7 +18,7 @@ while getopts ':c:n:s:h:' OPTION; do
   case "${OPTION}" in
     c)awk -F, -v val="$OPTARG" '$2==val {sum+=$3} END {if(sum == "") {print 0} else {print sum}}' main.csv;;
     n)awk -F, -v val="$OPTARG" '$4==val {sum+=$3} END {if(sum == "") {print 0} else {print sum}}' main.csv;;
-    s)sort -t, -k2,2 main.csv>out.csv;cat out.csv>main.csv;;
+    s)sort -t, -k2,2 main.csv>out.csv;cat out.csv>main.csv;rm out.csv;;
     h)
       echo "h ${OPTARG}"
       ;;
