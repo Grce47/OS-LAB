@@ -15,7 +15,6 @@ COL=0
 
 for i in "${array[@]}"
 do
-    echo $i
     sample=$(jq --slurp . < $source/$i)
     file=$(echo $i | sed "s/jsonl/csv/")
     rm -f "$dest/$file"
