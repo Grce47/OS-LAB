@@ -1,5 +1,5 @@
 file_does_not_exists=1;
-header="Date(dd-mm-yy),Category,Amount,Name"
+header="Date,Category,Amount,Name"
 
 
 # OPTIMIZE THIS
