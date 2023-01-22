@@ -24,13 +24,7 @@ fi
 while getopts ':c:n:s:h' OPTION; do
   case "${OPTION}" in
     c)awk -F, -v val="$OPTARG" '$2==val {sum+=$3} END {if(sum == "") {print 0} else {print sum}}' main.csv;;n)awk -F, -v val="$OPTARG" '$4==val {sum+=$3} END {if(sum == "") {print 0} else {print sum}}' main.csv;;s)var=0;(($OPTARG=="Category"))&&var=2;(($OPTARG=="Date"))&&var=1;(($OPTARG=="Amount"))&&var=3;(($OPTARG=="Name"))&&var=4;(($var!=0))&&tail -n +2 main.csv|sort -t, -k$var,$var -n>temp.del;(($var!=0))&&cat <temp.del>main.csv;(($var!=0))&&sed -i "1i\\$header" main.csv;(($var!=0))&&rm *.del;;
-    h)
-# TODO : COMPLETE THIS FLAG FUNCTIONALITY
-      echo "h flag called"
-      ;;
-    # ?)
-    #   exit 1
-    #   ;;
+    h)echo "NAME";echo "    Assgn1_8_08.sh - Food Expenditure Database";echo;echo "USAGE";echo "    ./Assgn1_8_08.sh -c category -n name -s column record [...]";echo;;
   esac
 done
 shift "$(($OPTIND -1))"
