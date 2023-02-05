@@ -1,3 +1,10 @@
+/*
+    Compilation command: 
+    g++ bash.cpp -std=c++17 -lstdc++fs -o mybash
+    Execution command: 
+    ./mybash
+*/
+
 #include <iostream>
 #include <vector> 
 #include <filesystem>
@@ -16,7 +23,6 @@ void pwd()
 {
     fs::path cwd = fs::current_path(); 
     cout << cwd.string() << endl;
-    fflush(stdout); 
 }
 
 void cd(char * dir)
@@ -34,7 +40,6 @@ int main()
     while(1)
     {
         cout << fs::current_path().string() << "$ "; 
-        fflush(stdout);
 
         char userInput[5000];
         memset(userInput, 0, sizeof(userInput));
@@ -179,17 +184,14 @@ int main()
                     dup2(outputFileDesc, 1);
                     close(outputFileDesc);
                 }
-                else
-                {
-                    if(execvp(args[0], args) < 0)
-                    {   
-                        cerr << "Cannot find the command: ";
-                        for(int i = 0; i < arguments.size(); i++)
-                        {
-                            cerr << arguments[i] << " ";
-                        }
-                        cerr << endl; 
+                if(execvp(args[0], args) < 0)
+                {   
+                    cerr << "Cannot find the command: ";
+                    for(int i = 0; i < arguments.size(); i++)
+                    {
+                        cerr << arguments[i] << " ";
                     }
+                    cerr << endl; 
                 }
                 exit(0); 
             }
