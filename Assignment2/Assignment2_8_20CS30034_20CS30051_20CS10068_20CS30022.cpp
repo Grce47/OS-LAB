@@ -1,18 +1,41 @@
 #include <iostream>
-#include <cstring>
-#include <sys/wait.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <fcntl.h>
 #include <vector> 
+#include <filesystem>
+
+#include <stdlib.h>
+#include <cstring>
+
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <unistd.h>
+
 using namespace std; 
+namespace fs = std::filesystem;
+
+void pwd()
+{
+    fs::path cwd = fs::current_path(); 
+    cout << cwd.string() << endl;
+    fflush(stdout); 
+}
+
+void cd(char * dir)
+{
+    int status = chdir(dir);
+    if(status == -1)
+    {
+        cerr << "Unable to cd in " << dir << endl; 
+    }
+}
 
 int main()
 {
     // Loop means a single process
     while(1)
     {
-        cout << "$ "; 
+        cout << fs::current_path().string() << "$ "; 
+        fflush(stdout);
+
         char userInput[5000];
         memset(userInput, 0, sizeof(userInput));
 
@@ -67,9 +90,25 @@ int main()
         vector<string> arguments; 
         bool readArg = true; 
 
+        bool runBackground = false; 
+        bool run_pwd = false; 
+        bool run_cd = false; 
+
         for(int i = 0; i < tokens.size(); i++)
         {
-            if(tokens[i] == ">")
+            if(tokens[0] == "pwd")
+            {
+                run_pwd = true; 
+            }
+            if(tokens[0] == "cd")
+            {
+                run_cd = true; 
+            }
+            if(tokens[i] == "&")
+            {
+                runBackground = true; 
+            }
+            else if(tokens[i] == ">")
             {
                 readOutputFile = true; 
                 readArg = false; 
@@ -116,38 +155,52 @@ int main()
         int inputFileDesc = open(inputFile.c_str(), O_RDONLY, 0777);
         int outputFileDesc = open(outputFile.c_str(), O_CREAT|O_WRONLY|O_TRUNC, 0777);
 
-        // Spawn a child process to run the input command
-        int pid = fork(); 
-        if(pid == 0)
+        if(run_pwd)
         {
-            if(inputFile != "")
-            {
-                dup2(inputFileDesc, 0);
-                close(inputFileDesc);
-            }
-            if(outputFile != "")
-            {
-                dup2(outputFileDesc, 1);
-                close(outputFileDesc);
-            }
-            if(execvp(args[0], args) < 0)
-            {   
-                cerr << "Cannot find the command: ";
-                for(int i = 0; i < arguments.size(); i++)
-                {
-                    cerr << arguments[i] << " ";
-                }
-                cerr << endl; 
-            }
-            exit(0); 
+            pwd(); 
         }
-        else if(pid > 0)
+        else if(run_cd)
         {
-            wait(NULL);     
+            cd(args[1]); 
         }
         else
         {
-            
+            // Spawn a child process to run the input command
+            int pid = fork(); 
+            if(pid == 0)
+            {
+                if(inputFile != "")
+                {
+                    dup2(inputFileDesc, 0);
+                    close(inputFileDesc);
+                }
+                if(outputFile != "")
+                {
+                    dup2(outputFileDesc, 1);
+                    close(outputFileDesc);
+                }
+                else
+                {
+                    if(execvp(args[0], args) < 0)
+                    {   
+                        cerr << "Cannot find the command: ";
+                        for(int i = 0; i < arguments.size(); i++)
+                        {
+                            cerr << arguments[i] << " ";
+                        }
+                        cerr << endl; 
+                    }
+                }
+                exit(0); 
+            }
+            else if(pid > 0)
+            {
+                wait(NULL);     
+            }
+            else
+            {
+                cerr << "Fork unsuccessull\n";
+            }
         }
     }
     return 0;
