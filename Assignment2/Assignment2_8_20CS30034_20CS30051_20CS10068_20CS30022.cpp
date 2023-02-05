@@ -1,8 +1,17 @@
 /*
+    Assignment2_8_20CS30034_20CS30051_20CS10068_20CS30022.cpp
+
+    Custom bash program to execute commands
+        OS Group 8
+            Grace Sharma
+            Umang Singla
+            Saurabh Das
+            Mradul Agrawal
+
     Compilation command: 
-    g++ bash.cpp -std=c++17 -lstdc++fs -o mybash
+        g++ bash.cpp -std=c++17 -lstdc++fs -lreadline -o mybash
     Execution command: 
-    ./mybash
+        ./mybash
 */
 
 #include <iostream>
@@ -15,6 +24,8 @@
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <unistd.h>
+
+#include <readline/readline.h>
 
 using namespace std; 
 namespace fs = std::filesystem;
@@ -34,33 +45,25 @@ void cd(char * dir)
     }
 }
 
+void bind_up_arrow_key()
+{
+
+}
+
 int main()
 {
+    vector<string> history; 
+    rl_initialize(); 
+
     // Loop means a single process
     while(1)
     {
-        cout << fs::current_path().string() << "$ "; 
+        string promptString =  fs::current_path().string() + "$ ";
 
-        char userInput[5000];
-        memset(userInput, 0, sizeof(userInput));
-
-        char charInput; 
-        int inputSize = 0;
-        // One by one take all the characters into the userInput array until a newline character is encountered
-        while(1)
-        {
-            charInput = getchar(); 
-            if(charInput == '\n')
-            {
-                break; 
-            }
-            else
-            {
-                userInput[inputSize] = charInput; 
-                inputSize++; 
-            }
-        }  
-        // userInput contain all the characters excluding the newline character
+        char * userInput; 
+        userInput = readline(promptString.c_str());
+        history.push_back(str(userInput));
+        int inputSize = strlen(userInput);
 
         // Parse the userInput
         vector<string> tokens; 
@@ -145,7 +148,7 @@ int main()
             }
         }
 
-        char ** args = (char **) malloc(sizeof(char *) * arguments.size()); 
+        char * args[arguments.size() + 1]; 
         for(int i = 0; i < arguments.size(); i++)
         {
             args[i] = (char *) malloc(arguments[i].size()+1);
@@ -155,11 +158,16 @@ int main()
             }
             strcpy(args[i], arguments[i].c_str());     
         }
+        args[arguments.size()] = NULL; 
 
         // Get the input and output file pointers
         int inputFileDesc = open(inputFile.c_str(), O_RDONLY, 0777);
         int outputFileDesc = open(outputFile.c_str(), O_CREAT|O_WRONLY|O_TRUNC, 0777);
 
+        fflush(stdin);
+
+        // Command executions
+        // Seperate handling for pwd and cd
         if(run_pwd)
         {
             pwd(); 
@@ -168,6 +176,7 @@ int main()
         {
             cd(args[1]); 
         }
+        // All other commands handled by execvp
         else
         {
             // Spawn a child process to run the input command
@@ -204,6 +213,11 @@ int main()
                 cerr << "Fork unsuccessull\n";
             }
         }
+        for(int i = 0; i < arguments.size(); i++)
+        {
+            free(args[i]);
+        }
+        free(userInput);
     }
     return 0;
 }
