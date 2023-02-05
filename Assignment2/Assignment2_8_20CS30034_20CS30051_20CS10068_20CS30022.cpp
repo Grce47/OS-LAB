@@ -9,9 +9,9 @@
             Mradul Agrawal
 
     Compilation command: 
-        g++ bash.cpp -std=c++17 -lstdc++fs -lreadline -o mybash
+        g++ Assignment2_8_20CS30034_20CS30051_20CS10068_20CS30022.cpp -std=c++17 -lstdc++fs -lreadline -o a.out
     Execution command: 
-        ./mybash
+        ./a.out
 */
 
 #include <iostream>
@@ -63,7 +63,6 @@ void cd(char * dir)
 
 void bind_up_arrow_key()
 {
-
 }
 
 int main()
