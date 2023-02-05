@@ -30,10 +30,26 @@
 using namespace std; 
 namespace fs = std::filesystem;
 
+int status, ctrl_z_status = 0;
+
+void parent_handler(int signum)
+{
+    cout<<endl<<fs::current_path().string()<<"$ ";
+    fflush(stdout);
+    return;
+}
+
+void ctrl_z_handler(int signum)
+{
+    ctrl_z_status = 1;
+}
+
+
 void pwd()
 {
     fs::path cwd = fs::current_path(); 
     cout << cwd.string() << endl;
+    fflush(stdout);
 }
 
 void cd(char * dir)
@@ -52,17 +68,17 @@ void bind_up_arrow_key()
 
 int main()
 {
-    vector<string> history; 
     rl_initialize(); 
 
     // Loop means a single process
     while(1)
     {
+        signal(SIGINT, parent_handler); // Ignore the SIGINT signal
+        signal(SIGTSTP, parent_handler); // Ignore the SIGTSTP signal
         string promptString =  fs::current_path().string() + "$ ";
 
         char * userInput; 
         userInput = readline(promptString.c_str());
-        history.push_back(str(userInput));
         int inputSize = strlen(userInput);
 
         // Parse the userInput
@@ -206,7 +222,15 @@ int main()
             }
             else if(pid > 0)
             {
-                wait(NULL);     
+                ctrl_z_status = 0;
+                signal(SIGINT, SIG_IGN); // Ignore the SIGINT signal
+                signal(SIGTSTP, ctrl_z_handler); // Ignore the SIGTSTP signal
+
+                status = waitpid(-1, NULL, WNOHANG);
+                while (status == 0 && ctrl_z_status == 0)
+                {
+                    status = waitpid(-1, NULL, WNOHANG);
+                } 
             }
             else
             {
