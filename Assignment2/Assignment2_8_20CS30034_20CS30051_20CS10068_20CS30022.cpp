@@ -192,26 +192,6 @@ int main()
         if (cmds.empty())
             continue;
 
-            
-        for (auto &cmd : cmds)
-        {
-            vector<string> args;
-            for (auto arg : cmd.args)
-            {
-                if (arg.find("*") != string::npos || arg.find("?") != string::npos)
-                {
-                    vector<string> files = find_files(const_cast<char *>(arg.c_str()));
-                    for (auto i : files)
-                        args.push_back(i);
-                }
-                else
-                {
-                    args.push_back(arg);
-                }
-            }
-            cmd.args = args;
-        }
-
         if (cmds.front().args[0] == "cd")
         {
             cd(cmds.front().args.size() > 1 ? cmds.front().args[1] : ".");
@@ -274,6 +254,25 @@ vector<Command> parseInput(const string &user_input)
             }
         }
         vec.push_back(current_command);
+    }
+    
+    for (auto &cmd : vec)
+    {
+        vector<string> args;
+        for (auto arg : cmd.args)
+        {
+            if (arg.find("*") != string::npos || arg.find("?") != string::npos)
+            {
+                vector<string> files = find_files(const_cast<char *>(arg.c_str()));
+                for (auto i : files)
+                    args.push_back(i);
+            }
+            else
+            {
+                args.push_back(arg);
+            }
+        }
+        cmd.args = args;
     }
 
     return vec;
