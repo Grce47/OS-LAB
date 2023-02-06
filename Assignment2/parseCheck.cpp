@@ -6,20 +6,26 @@
 using namespace std;
 
 void remove_excess_spaces(string &s);
-
 struct Command
 {
     vector<string> args;
     string output_redirect, input_redirect;
-    void display()
-    {
-        for (int i = 0; i < args.size(); i++)
-        {
-            cout << "{" << i << ":" << args[i] << "} ";
-        }
-        cout << "\nInput : " << input_redirect << " Output : " << output_redirect << "\n";
-    }
 };
+vector<Command> parseInput(const string &user_input);
+
+int main()
+{
+    string user_input;
+    getline(cin, user_input);
+
+    // add neccessary spaces to user_input maybe ...eg "./a.out >out.txt" --> "./a.out > out.txt"
+    cout << user_input << "\n";
+    vector<Command> res = parseInput(user_input);
+    return 0;
+}
+
+
+
 
 vector<Command> parseInput(const string &user_input)
 {
@@ -46,6 +52,7 @@ vector<Command> parseInput(const string &user_input)
             remove_excess_spaces(token);
             if (token.empty())
                 continue;
+
             if (add_to_input)
             {
                 current_command.input_redirect = token;
@@ -74,20 +81,6 @@ vector<Command> parseInput(const string &user_input)
 
     return vec;
 }
-
-int main()
-{
-    string user_input;
-    getline(cin, user_input);
-
-    // add neccessary spaces to user_input maybe ...eg "./a.out >out.txt" --> "./a.out > out.txt"
-    cout << user_input << "\n";
-    vector<Command> res = parseInput(user_input);
-    for (Command &ele : res)
-        ele.display();
-    return 0;
-}
-
 void remove_excess_spaces(string &s)
 {
     // Remove leading spaces

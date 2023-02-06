@@ -8,15 +8,16 @@
             Saurabh Das
             Mradul Agrawal
 
-    Compilation command: 
+    Compilation command:
         g++ Assignment2_8_20CS30034_20CS30051_20CS10068_20CS30022.cpp -std=c++17 -lstdc++fs -lreadline -o a.out
-    Execution command: 
+    Execution command:
         ./a.out
 */
 
 #include <iostream>
-#include <vector> 
+#include <vector>
 #include <filesystem>
+#include <algorithm>
 
 #include <stdlib.h>
 #include <cstring>
@@ -27,14 +28,23 @@
 
 #include <readline/readline.h>
 
-using namespace std; 
+using namespace std;
 namespace fs = std::filesystem;
+
+void remove_excess_spaces(string &s);
+struct Command
+{
+    vector<string> args;
+    string output_redirect, input_redirect;
+};
+vector<Command> parseInput(const string &user_input);
 
 int status, ctrl_z_status = 0;
 
 void parent_handler(int signum)
 {
-    cout<<endl<<fs::current_path().string()<<"$ ";
+    cout << endl
+         << fs::current_path().string() << "$ ";
     fflush(stdout);
     return;
 }
@@ -44,20 +54,19 @@ void ctrl_z_handler(int signum)
     ctrl_z_status = 1;
 }
 
-
 void pwd()
 {
-    fs::path cwd = fs::current_path(); 
+    fs::path cwd = fs::current_path();
     cout << cwd.string() << endl;
     fflush(stdout);
 }
 
-void cd(char * dir)
+void cd(string dir)
 {
-    int status = chdir(dir);
-    if(status == -1)
+    int status = chdir(dir.c_str());
+    if (status == -1)
     {
-        cerr << "Unable to cd in " << dir << endl; 
+        cerr << "Unable to cd in " << dir << endl;
     }
 }
 
@@ -67,180 +76,180 @@ void bind_up_arrow_key()
 
 int main()
 {
-    rl_initialize(); 
+    rl_initialize();
 
     // Loop means a single process
-    while(1)
+    while (1)
     {
-        signal(SIGINT, parent_handler); // Ignore the SIGINT signal
+        signal(SIGINT, parent_handler);  // Ignore the SIGINT signal
         signal(SIGTSTP, parent_handler); // Ignore the SIGTSTP signal
-        string promptString =  fs::current_path().string() + "$ ";
+        string promptString = fs::current_path().string() + "$ ";
 
-        char * userInput; 
+        char *userInput;
         userInput = readline(promptString.c_str());
         int inputSize = strlen(userInput);
 
-        // Parse the userInput
-        vector<string> tokens; 
-        bool readingArg = 0;
-        int tokenPtr = -1; 
-        
-        for(int i = 0; i < inputSize; i++)
-        {
-            if(userInput[i] == ' ')
-            {
-                readingArg = false; 
-            }
-            else
-            {
-                if(readingArg)
-                {
-                    tokens[tokenPtr] += userInput[i];
-                }
-                else
-                {
-                    readingArg = true; 
-                    tokenPtr++;
-                    tokens.push_back("");
-                    tokens[tokenPtr] += userInput[i];
-                }
-            }
-        }
+        string user_input;
+        user_input.assign(userInput);
 
-        bool readOutputFile = false, readInputFile = false; 
-        string inputFile = "", outputFile = ""; 
-
-        vector<string> arguments; 
-        bool readArg = true; 
-
-        bool runBackground = false; 
-        bool run_pwd = false; 
-        bool run_cd = false; 
-
-        for(int i = 0; i < tokens.size(); i++)
-        {
-            if(tokens[0] == "pwd")
-            {
-                run_pwd = true; 
-            }
-            if(tokens[0] == "cd")
-            {
-                run_cd = true; 
-            }
-            if(tokens[i] == "&")
-            {
-                runBackground = true; 
-            }
-            else if(tokens[i] == ">")
-            {
-                readOutputFile = true; 
-                readArg = false; 
-            }
-            else if(tokens[i] == "<")
-            {   
-                readInputFile = true; 
-                readArg = false; 
-            }
-            else
-            {
-                if(readInputFile)
-                {
-                    readInputFile = false; 
-                    inputFile = tokens[i];
-                }
-                else if(readOutputFile)
-                {
-                    readOutputFile = false; 
-                    outputFile = tokens[i];
-                }
-                else
-                {
-                    if(readArg)
-                    {
-                        arguments.push_back(tokens[i]);
-                    }
-                }
-            }
-        }
-
-        char * args[arguments.size() + 1]; 
-        for(int i = 0; i < arguments.size(); i++)
-        {
-            args[i] = (char *) malloc(arguments[i].size()+1);
-            for(int j = 0; j < arguments[i].size()+1; j++)
-            {
-                args[i][j] = 0; 
-            }
-            strcpy(args[i], arguments[i].c_str());     
-        }
-        args[arguments.size()] = NULL; 
-
-        // Get the input and output file pointers
-        int inputFileDesc = open(inputFile.c_str(), O_RDONLY, 0777);
-        int outputFileDesc = open(outputFile.c_str(), O_CREAT|O_WRONLY|O_TRUNC, 0777);
-
+        // necessary?
         fflush(stdin);
 
-        // Command executions
-        // Seperate handling for pwd and cd
-        if(run_pwd)
+        vector<Command> cmds = parseInput(user_input);
+
+        if (cmds.size() == 1)
         {
-            pwd(); 
+            char *c_string_args[cmds.front().args.size() + 1];
+            for (int i = 0; i < cmds.front().args.size(); i++)
+            {
+                c_string_args[i] = (char *)malloc(cmds.front().args[i].size() + 1);
+                for (int j = 0; j < cmds.front().args[i].size() + 1; j++)
+                {
+                    c_string_args[i][j] = 0;
+                }
+                strcpy(c_string_args[i], cmds.front().args[i].c_str());
+            }
+            c_string_args[cmds.front().args.size()] = NULL;
+
+            int inputFileDesc = open(cmds.front().input_redirect.c_str(), O_RDONLY, 0777);
+            int outputFileDesc = open(cmds.front().output_redirect.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0777);
+
+            // Command executions
+            // Seperate handling for pwd and cd
+
+            if (cmds.front().args[0] == "pwd")
+            {
+                pwd();
+            }
+            else if (cmds.front().args[0] == "cd")
+            {
+                cd(cmds.front().args[1]);
+            }
+            // All other commands handled by execvp
+            else
+            {
+                // Spawn a child process to run the input command
+                int pid = fork();
+                if (pid == 0)
+                {
+                    if (cmds.front().input_redirect != "")
+                    {
+                        dup2(inputFileDesc, 0);
+                        close(inputFileDesc);
+                    }
+                    if (cmds.front().output_redirect != "")
+                    {
+                        dup2(outputFileDesc, 1);
+                        close(outputFileDesc);
+                    }
+
+                    if (execvp(cmds.front().args[0].c_str(), c_string_args) < 0)
+                    {
+                        cerr << "Cannot find the command: ";
+                        for (auto &ele : cmds.front().args)
+                            cerr << ele << " ";
+                        cerr << endl;
+                    }
+                    exit(0);
+                }
+                else if (pid > 0)
+                {
+                    ctrl_z_status = 0;
+                    signal(SIGINT, SIG_IGN);         // Ignore the SIGINT signal
+                    signal(SIGTSTP, ctrl_z_handler); // Ignore the SIGTSTP signal
+
+                    status = waitpid(-1, NULL, WNOHANG);
+                    while (status == 0 && ctrl_z_status == 0)
+                    {
+                        status = waitpid(-1, NULL, WNOHANG);
+                    }
+                }
+                else
+                {
+                    cerr << "Fork unsuccessull\n";
+                }
+            }
+            for (int i = 0; i < cmds.front().args.size(); i++)
+            {
+                free(c_string_args[i]);
+            }
         }
-        else if(run_cd)
-        {
-            cd(args[1]); 
-        }
-        // All other commands handled by execvp
         else
         {
-            // Spawn a child process to run the input command
-            int pid = fork(); 
-            if(pid == 0)
-            {
-                if(inputFile != "")
-                {
-                    dup2(inputFileDesc, 0);
-                    close(inputFileDesc);
-                }
-                if(outputFile != "")
-                {
-                    dup2(outputFileDesc, 1);
-                    close(outputFileDesc);
-                }
-                if(execvp(args[0], args) < 0)
-                {   
-                    cerr << "Cannot find the command: ";
-                    for(int i = 0; i < arguments.size(); i++)
-                    {
-                        cerr << arguments[i] << " ";
-                    }
-                    cerr << endl; 
-                }
-                exit(0); 
-            }
-            else if(pid > 0)
-            {
-                ctrl_z_status = 0;
-                signal(SIGINT, SIG_IGN); // Ignore the SIGINT signal
-                signal(SIGTSTP, ctrl_z_handler); // Ignore the SIGTSTP signal
+            // pipe exists
+        }
+    }
+    return 0;
+}
 
-                status = waitpid(-1, NULL, WNOHANG);
-                while (status == 0 && ctrl_z_status == 0)
-                {
-                    status = waitpid(-1, NULL, WNOHANG);
-                } 
+vector<Command> parseInput(const string &user_input)
+{
+    vector<Command> vec;
+
+    string pipe_commands;
+    stringstream pipe_ss(user_input);
+
+    while (getline(pipe_ss, pipe_commands, '|'))
+    {
+        remove_excess_spaces(pipe_commands);
+        if (pipe_commands.empty())
+            continue;
+
+        Command current_command;
+        current_command.input_redirect = current_command.output_redirect = "";
+
+        string token;
+        istringstream space_sep_ss(pipe_commands);
+
+        bool add_to_output = false, add_to_input = false;
+        while (space_sep_ss >> token)
+        {
+            remove_excess_spaces(token);
+            if (token.empty())
+                continue;
+
+            if (add_to_input)
+            {
+                current_command.input_redirect = token;
+                add_to_input = false;
+            }
+            else if (add_to_output)
+            {
+                current_command.output_redirect = token;
+                add_to_output = false;
+            }
+            else if (token == ">")
+            {
+                add_to_output = true;
+            }
+            else if (token == "<")
+            {
+                add_to_input = true;
             }
             else
             {
-                cerr << "Fork unsuccessull\n";
+                current_command.args.push_back(token);
             }
         }
-        for(int i = 0; i < arguments.size(); i++)
-        {
-            free(args[i]);
-        }
-        free(userInput);
+        vec.push_back(current_command);
     }
-    return 0;
+
+    return vec;
+}
+void remove_excess_spaces(string &s)
+{
+    // Remove leading spaces
+    s.erase(s.begin(), find_if(s.begin(), s.end(), [](int c)
+                               { return !isspace(c); }));
+
+    // Remove trailing spaces
+    s.erase(find_if(s.rbegin(), s.rend(), [](int c)
+                    { return !isspace(c); })
+                .base(),
+            s.end());
+
+    // Remove consecutive spaces
+    string::iterator new_end = unique(s.begin(), s.end(), [](char lhs, char rhs)
+                                      { return isspace(lhs) && isspace(rhs); });
+    s.erase(new_end, s.end());
 }
