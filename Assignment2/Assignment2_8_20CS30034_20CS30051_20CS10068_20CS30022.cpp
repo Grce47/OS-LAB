@@ -14,10 +14,53 @@
         ./a.out
 */
 
+/*
+    (a) Run an external command
+    Done
+
+    (b) Run an external command by redirecting standard input from a file
+    Done
+
+    (c) Run an external command by redirecting standard output to a file
+    Done
+
+    (d) Combination of input and output redirection
+    Done
+
+    (e) Run an external command in the background with possible input and output redirections
+    TODO
+
+    (f) Run several external commands in the pipe mode
+    TODO
+
+    (g) Interrupting commands running in your shell (using signal call)
+    Control C with unexecuted commands
+
+    (h) Implementing cd and pwd
+    Done
+    cd and pwd implemented but some test cases needed to be checked for cd
+
+    (i) Handling wildcards in commands (‘*’ and ‘?’)
+    Done
+
+    (j) Implementing searching through history using up/down arrow keys
+    Done
+
+    (k) Command to detect a simple malware
+    TODO
+
+    (l) Command to check for file locks
+    TODO
+
+    (m) Features to help editing commands
+    TODO
+*/
+
 #include <iostream>
 #include <vector>
 #include <filesystem>
 #include <algorithm>
+#include <fstream>
 #include <queue>
 
 #include <stdlib.h>
@@ -73,8 +116,97 @@ void cd(string dir)
     }
 }
 
-void bind_up_arrow_key()
+class CommandHistory
 {
+    string history_file = "history.txt";
+    int max_history_size = 1000;
+    int history_pointer = 0; 
+    deque<string> history_queue;
+    ofstream ofile; 
+
+    public: 
+        CommandHistory()
+        {
+            ifstream file; 
+            file.open(history_file);
+            if(file.is_open())
+            {
+                string line;
+                while(getline(file, line))
+                {
+                    history_queue.push_back(line);
+                }
+                file.close();
+            }
+            reset_pointer();
+
+            // For output in the file
+            ofile.open(history_file, std::ios_base::app);
+        }
+        string current_command()
+        {
+            if(history_queue.size() == 0)
+            {
+                return "";
+            }
+            return history_queue[history_pointer];
+        }
+        void add_command(string command)
+        {
+            if(history_queue.size() == max_history_size)
+            {
+                history_queue.pop_front();
+            }
+            history_queue.push_back(command);
+            history_pointer = history_queue.size();
+            ofile << command << endl;
+        }
+        void reset_pointer()
+        {
+            history_pointer = history_queue.size();
+        }
+        void decrease_pointer()
+        {
+            if(history_pointer > 0)
+            {
+                history_pointer--;
+            }
+        }
+        int increase_pointer()
+        {
+            if(history_pointer < history_queue.size() - 1)
+            {
+                history_pointer++;
+                return 1; 
+            }
+            else
+            {
+                return 0; 
+            }
+        }
+};
+
+CommandHistory command_history;
+
+static int bind_up_arrow_key(int count, int key)
+{
+    command_history.decrease_pointer();
+    rl_replace_line(command_history.current_command().c_str(), 0);
+    return 0; 
+}
+
+static int bind_down_arrow_key(int count, int key)
+{
+    if(command_history.increase_pointer() == 0)
+    {
+        command_history.reset_pointer();
+        rl_replace_line("", 0);
+    }
+    else
+    {
+        rl_replace_line(command_history.current_command().c_str(), 0);
+    }
+    return 0; 
 }
 
 void execute_process(const vector<Command> &cmds)
@@ -174,6 +306,8 @@ void execute_process(const vector<Command> &cmds)
 int main()
 {
     rl_initialize();
+    rl_bind_keyseq("\\e[A", bind_up_arrow_key);
+    rl_bind_keyseq("\\e[B", bind_down_arrow_key);
 
     // Loop means a single process
     while (1)
@@ -189,8 +323,10 @@ int main()
         string user_input;
         user_input.assign(userInput);
 
-        // necessary?
-        fflush(stdin);
+        if(user_input != "")
+        {
+            command_history.add_command(user_input);
+        }
 
         vector<Command> cmds = parseInput(user_input);
         if (cmds.empty())
