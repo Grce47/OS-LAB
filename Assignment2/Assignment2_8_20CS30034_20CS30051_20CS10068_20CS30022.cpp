@@ -87,8 +87,11 @@ vector<Command> parseInput(const string &user_input);
 
 int status, ctrl_z_status = 0;
 
-void parent_handler(int signum)
+void ctrl_c_handler(int signum)
 {
+    rl_replace_line("", 0);
+    rl_reset_line_state();
+    rl_redisplay();
     cout << endl
          << fs::current_path().string() << "$ ";
     fflush(stdout);
@@ -312,8 +315,8 @@ int main()
     // Loop means a single process
     while (1)
     {
-        signal(SIGINT, parent_handler);  // Ignore the SIGINT signal
-        signal(SIGTSTP, parent_handler); // Ignore the SIGTSTP signal
+        signal(SIGINT, ctrl_c_handler);  // Ignore the SIGINT signal
+        signal(SIGTSTP, ctrl_c_handler); // Ignore the SIGTSTP signal
         string promptString = fs::current_path().string() + "$ ";
 
         char *userInput;
