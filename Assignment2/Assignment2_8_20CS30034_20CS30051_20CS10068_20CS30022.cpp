@@ -84,6 +84,7 @@ void execute_process(const vector<Command> &cmds)
     for (int loop = 0; loop < n; loop++)
     {
         int infd = STDIN_FILENO, outfd = STDOUT_FILENO;
+
         if (cmds[loop].input_redirect != "")
         {
             infd = open(cmds[loop].input_redirect.c_str(), O_RDONLY, 0777);
@@ -101,7 +102,10 @@ void execute_process(const vector<Command> &cmds)
         {
             if (pipe(pipefd) == -1)
             {
-                perror("Pipe error: ");
+                cerr << "PIPE NOT FORMED : ";
+                for (auto &ele : cmds[loop].args)
+                    cerr << ele << " ";
+                cerr << endl;
             }
             outfd = pipefd[1];
         }
@@ -122,7 +126,6 @@ void execute_process(const vector<Command> &cmds)
             if (cmds[loop].args[0] == "pwd")
             {
                 pwd();
-                exit(EXIT_SUCCESS);
             }
             else
             {
@@ -154,14 +157,15 @@ void execute_process(const vector<Command> &cmds)
         }
         else if (childpid > 0)
         {
+            close(pipefd[1]);
             ctrl_z_status = 0;
             signal(SIGINT, SIG_IGN);         // Ignore the SIGINT signal
             signal(SIGTSTP, ctrl_z_handler); // Ignore the SIGTSTP signal
 
-            status = waitpid(-1, NULL, WNOHANG);
+            status = waitpid(childpid, NULL, WNOHANG);
             while (status == 0 && ctrl_z_status == 0)
             {
-                status = waitpid(-1, NULL, WNOHANG);
+                status = waitpid(childpid, NULL, WNOHANG);
             }
         }
     }
@@ -255,7 +259,6 @@ vector<Command> parseInput(const string &user_input)
         }
         vec.push_back(current_command);
     }
-    
     for (auto &cmd : vec)
     {
         vector<string> args;
