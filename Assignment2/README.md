@@ -4,7 +4,7 @@
 
 - Grace Sharma
 - Umang Singla
-- Saurabh Das
+- Sourabh Das
 - Mradul Agrawal
 
 Compilation command:
