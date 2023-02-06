@@ -18,9 +18,11 @@
 #include <vector>
 #include <filesystem>
 #include <algorithm>
+#include <queue>
 
 #include <stdlib.h>
 #include <cstring>
+#include <fnmatch.h>
 
 #include <sys/wait.h>
 #include <fcntl.h>
@@ -32,6 +34,7 @@ using namespace std;
 namespace fs = std::filesystem;
 
 void remove_excess_spaces(string &s);
+vector<string> find_files(char *);
 struct Command
 {
     vector<string> args;
@@ -180,6 +183,20 @@ int main()
         fflush(stdin);
 
         vector<Command> cmds = parseInput(user_input);
+
+        for(auto &cmd: cmds){
+            vector<string> args;
+            for(auto arg:cmd.args){
+                if(arg.find("*") != string::npos || arg.find("?") != string::npos){
+                    vector<string> files = find_files(const_cast<char *> (arg.c_str()));
+                    for(auto i:files) args.push_back(i);
+                }else{
+                    args.push_back(arg);
+                }
+            }
+            cmd.args = args;
+        }
+
         if (cmds.front().args[0] == "cd")
         {
             cd(cmds.front().args.size() > 1 ? cmds.front().args[1] : ".");
@@ -245,6 +262,59 @@ vector<Command> parseInput(const string &user_input)
     }
 
     return vec;
+}
+
+vector<string> find_files(char *pattern){
+    string process_path = fs::current_path().string();
+    queue<pair<string,int>> q;
+    vector<string> res;
+    char *tok = strtok(pattern, "/");
+    string path(process_path);
+    q.push({path,0});
+    int lvl = 1;
+    while(!q.empty()){
+        string cur_path = q.front().first;
+        int path_lvl = q.front().second;
+        while (tok != NULL&&strcmp(tok,".") == 0)
+        {
+            tok = strtok(NULL,"/");
+        }
+        if(tok == NULL){
+            res.push_back(cur_path);
+            q.pop();
+        }else{
+            while (!q.empty() && q.front().second == path_lvl)
+            {
+                cur_path = q.front().first;
+                if(strcmp(tok,"..")==0){
+                    chdir(cur_path.c_str());
+                    chdir("..");
+                    q.push({fs::current_path().string(),lvl});
+                    chdir(process_path.c_str());
+                }else{
+                    for (const auto& entry : fs::directory_iterator(cur_path)) {
+                        fs::path outfilename = entry.path();
+                        string outfilename_str = outfilename.string();
+                        string temp(tok);
+                        if(temp != "."){
+                            temp = cur_path + "/" + temp;
+                        }else temp = cur_path;
+
+                        
+                        if(fnmatch(temp.c_str(), outfilename_str.c_str(), FNM_PATHNAME) == 0){
+                            q.push({outfilename_str,lvl});
+                        }
+                    }
+                }
+                
+                q.pop();
+            }
+            lvl++;
+        }
+        tok = strtok(NULL, "/");
+    }
+    chdir(process_path.c_str());
+    return res;
 }
 
 void remove_excess_spaces(string &s)
