@@ -2,6 +2,8 @@
 #include <stdio.h>
 int main()
 {
-    printf("hello world\n");
+    char hel[100];
+    scanf("%s",hel);
+    printf("GOT = %s\n",hel);
     return 0;
 }

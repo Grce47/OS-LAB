@@ -74,6 +74,90 @@ void bind_up_arrow_key()
 {
 }
 
+void execute_process(const vector<Command> &cmds)
+{
+    int n = cmds.size(), pipefd[2];
+
+    for (int loop = 0; loop < n; loop++)
+    {
+        int infd = STDIN_FILENO, outfd = STDOUT_FILENO;
+        if (cmds[loop].input_redirect != "")
+        {
+            infd = open(cmds[loop].input_redirect.c_str(), O_RDONLY, 0777);
+        }
+        if (cmds[loop].output_redirect != "")
+        {
+            outfd = open(cmds[loop].output_redirect.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_APPEND, 0777);
+        }
+
+        if (loop > 0)
+        {
+            infd = pipefd[0];
+        }
+        if (loop + 1 < n)
+        {
+            if (pipe(pipefd) == -1)
+            {
+                perror("Pipe error: ");
+            }
+            outfd = pipefd[1];
+        }
+
+        int childpid = fork();
+        if (childpid == 0)
+        {
+            if (infd != STDIN_FILENO)
+            {
+                dup2(infd, STDIN_FILENO);
+                close(infd);
+            }
+            if (outfd != STDOUT_FILENO)
+            {
+                dup2(outfd, STDOUT_FILENO);
+                close(outfd);
+            }
+            if (cmds[loop].args[0] == "pwd")
+            {
+                pwd();
+                exit(EXIT_SUCCESS);
+            }
+            else
+            {
+                char *c_string_args[cmds[loop].args.size() + 1];
+                for (int i = 0; i < cmds[loop].args.size(); i++)
+                {
+                    c_string_args[i] = (char *)malloc(cmds[loop].args[i].size() + 1);
+                    for (int j = 0; j < cmds[loop].args[i].size() + 1; j++)
+                    {
+                        c_string_args[i][j] = 0;
+                    }
+                    strcpy(c_string_args[i], cmds[loop].args[i].c_str());
+                }
+                c_string_args[cmds[loop].args.size()] = NULL;
+                execvp(c_string_args[0], c_string_args);
+                for (int i = 0; i < cmds[loop].args.size(); i++)
+                {
+                    free(c_string_args[i]);
+                }
+            }
+            perror("Exec error: ");
+            exit(EXIT_FAILURE);
+        }
+        else if (childpid > 0)
+        {
+            ctrl_z_status = 0;
+            signal(SIGINT, SIG_IGN);         // Ignore the SIGINT signal
+            signal(SIGTSTP, ctrl_z_handler); // Ignore the SIGTSTP signal
+
+            status = waitpid(-1, NULL, WNOHANG);
+            while (status == 0 && ctrl_z_status == 0)
+            {
+                status = waitpid(-1, NULL, WNOHANG);
+            }
+        }
+    }
+}
+
 int main()
 {
     rl_initialize();
@@ -96,88 +180,14 @@ int main()
         fflush(stdin);
 
         vector<Command> cmds = parseInput(user_input);
-
-        if (cmds.size() == 1)
+        if (cmds.front().args[0] == "cd")
         {
-            char *c_string_args[cmds.front().args.size() + 1];
-            for (int i = 0; i < cmds.front().args.size(); i++)
-            {
-                c_string_args[i] = (char *)malloc(cmds.front().args[i].size() + 1);
-                for (int j = 0; j < cmds.front().args[i].size() + 1; j++)
-                {
-                    c_string_args[i][j] = 0;
-                }
-                strcpy(c_string_args[i], cmds.front().args[i].c_str());
-            }
-            c_string_args[cmds.front().args.size()] = NULL;
-
-            int inputFileDesc = open(cmds.front().input_redirect.c_str(), O_RDONLY, 0777);
-            int outputFileDesc = open(cmds.front().output_redirect.c_str(), O_CREAT | O_WRONLY | O_TRUNC, 0777);
-
-            // Command executions
-            // Seperate handling for pwd and cd
-
-            if (cmds.front().args[0] == "pwd")
-            {
-                pwd();
-            }
-            else if (cmds.front().args[0] == "cd")
-            {
-                cd(cmds.front().args[1]);
-            }
-            // All other commands handled by execvp
-            else
-            {
-                // Spawn a child process to run the input command
-                int pid = fork();
-                if (pid == 0)
-                {
-                    if (cmds.front().input_redirect != "")
-                    {
-                        dup2(inputFileDesc, 0);
-                        close(inputFileDesc);
-                    }
-                    if (cmds.front().output_redirect != "")
-                    {
-                        dup2(outputFileDesc, 1);
-                        close(outputFileDesc);
-                    }
-
-                    if (execvp(cmds.front().args[0].c_str(), c_string_args) < 0)
-                    {
-                        cerr << "Cannot find the command: ";
-                        for (auto &ele : cmds.front().args)
-                            cerr << ele << " ";
-                        cerr << endl;
-                    }
-                    exit(0);
-                }
-                else if (pid > 0)
-                {
-                    ctrl_z_status = 0;
-                    signal(SIGINT, SIG_IGN);         // Ignore the SIGINT signal
-                    signal(SIGTSTP, ctrl_z_handler); // Ignore the SIGTSTP signal
-
-                    status = waitpid(-1, NULL, WNOHANG);
-                    while (status == 0 && ctrl_z_status == 0)
-                    {
-                        status = waitpid(-1, NULL, WNOHANG);
-                    }
-                }
-                else
-                {
-                    cerr << "Fork unsuccessull\n";
-                }
-            }
-            for (int i = 0; i < cmds.front().args.size(); i++)
-            {
-                free(c_string_args[i]);
-            }
+            cd(cmds.front().args.size() > 1 ? cmds.front().args[1] : ".");
         }
         else
-        {
-            // pipe exists
-        }
+            execute_process(cmds);
+
+        free(userInput);
     }
     return 0;
 }
@@ -236,6 +246,7 @@ vector<Command> parseInput(const string &user_input)
 
     return vec;
 }
+
 void remove_excess_spaces(string &s)
 {
     // Remove leading spaces
