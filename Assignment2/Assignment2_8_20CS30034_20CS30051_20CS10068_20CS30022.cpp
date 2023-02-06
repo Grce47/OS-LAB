@@ -184,13 +184,19 @@ int main()
 
         vector<Command> cmds = parseInput(user_input);
 
-        for(auto &cmd: cmds){
+        for (auto &cmd : cmds)
+        {
             vector<string> args;
-            for(auto arg:cmd.args){
-                if(arg.find("*") != string::npos || arg.find("?") != string::npos){
-                    vector<string> files = find_files(const_cast<char *> (arg.c_str()));
-                    for(auto i:files) args.push_back(i);
-                }else{
+            for (auto arg : cmd.args)
+            {
+                if (arg.find("*") != string::npos || arg.find("?") != string::npos)
+                {
+                    vector<string> files = find_files(const_cast<char *>(arg.c_str()));
+                    for (auto i : files)
+                        args.push_back(i);
+                }
+                else
+                {
                     args.push_back(arg);
                 }
             }
@@ -264,49 +270,61 @@ vector<Command> parseInput(const string &user_input)
     return vec;
 }
 
-vector<string> find_files(char *pattern){
+vector<string> find_files(char *pattern)
+{
     string process_path = fs::current_path().string();
-    queue<pair<string,int>> q;
+    queue<pair<string, int>> q;
     vector<string> res;
     char *tok = strtok(pattern, "/");
     string path(process_path);
-    q.push({path,0});
+    q.push({path, 0});
     int lvl = 1;
-    while(!q.empty()){
+    while (!q.empty())
+    {
         string cur_path = q.front().first;
         int path_lvl = q.front().second;
-        while (tok != NULL&&strcmp(tok,".") == 0)
+        while (tok != NULL && strcmp(tok, ".") == 0)
         {
-            tok = strtok(NULL,"/");
+            tok = strtok(NULL, "/");
         }
-        if(tok == NULL){
+        if (tok == NULL)
+        {
             res.push_back(cur_path);
             q.pop();
-        }else{
+        }
+        else
+        {
             while (!q.empty() && q.front().second == path_lvl)
             {
                 cur_path = q.front().first;
-                if(strcmp(tok,"..")==0){
+                if (strcmp(tok, "..") == 0)
+                {
                     chdir(cur_path.c_str());
                     chdir("..");
-                    q.push({fs::current_path().string(),lvl});
+                    q.push({fs::current_path().string(), lvl});
                     chdir(process_path.c_str());
-                }else{
-                    for (const auto& entry : fs::directory_iterator(cur_path)) {
+                }
+                else
+                {
+                    for (const auto &entry : fs::directory_iterator(cur_path))
+                    {
                         fs::path outfilename = entry.path();
                         string outfilename_str = outfilename.string();
                         string temp(tok);
-                        if(temp != "."){
+                        if (temp != ".")
+                        {
                             temp = cur_path + "/" + temp;
-                        }else temp = cur_path;
+                        }
+                        else
+                            temp = cur_path;
 
-                        
-                        if(fnmatch(temp.c_str(), outfilename_str.c_str(), FNM_PATHNAME) == 0){
-                            q.push({outfilename_str,lvl});
+                        if (fnmatch(temp.c_str(), outfilename_str.c_str(), FNM_PATHNAME) == 0)
+                        {
+                            q.push({outfilename_str, lvl});
                         }
                     }
                 }
-                
+
                 q.pop();
             }
             lvl++;
