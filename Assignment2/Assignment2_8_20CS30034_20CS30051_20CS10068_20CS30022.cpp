@@ -137,14 +137,20 @@ void execute_process(const vector<Command> &cmds)
                     strcpy(c_string_args[i], cmds[loop].args[i].c_str());
                 }
                 c_string_args[cmds[loop].args.size()] = NULL;
-                execvp(c_string_args[0], c_string_args);
+
+                if (execvp(c_string_args[0], c_string_args) < 0)
+                {
+                    cerr << "Cannot Find Command : ";
+                    for (auto &ele : cmds[loop].args)
+                        cerr << ele << " ";
+                    cerr << endl;
+                }
+
                 for (int i = 0; i < cmds[loop].args.size(); i++)
                 {
                     free(c_string_args[i]);
                 }
             }
-            perror("Exec error: ");
-            exit(EXIT_FAILURE);
         }
         else if (childpid > 0)
         {
@@ -183,7 +189,10 @@ int main()
         fflush(stdin);
 
         vector<Command> cmds = parseInput(user_input);
+        if (cmds.empty())
+            continue;
 
+            
         for (auto &cmd : cmds)
         {
             vector<string> args;
