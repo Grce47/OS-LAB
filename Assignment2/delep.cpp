@@ -60,13 +60,10 @@ void fmatch(char* file, vector<int> &openpid, vector<int> &lockpid)
             {
                 if(strcmp(strtok(line, ":"), "lock") == 0) lockpid.push_back(pid);
             }
-
             fclose(file_info);
         }
-
         closedir(cdir);
     }
-
     closedir(dir);
 }
 
