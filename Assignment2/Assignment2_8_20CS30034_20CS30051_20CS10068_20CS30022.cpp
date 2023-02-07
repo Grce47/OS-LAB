@@ -14,64 +14,25 @@
         ./a.out
 */
 
-/*
-    (a) Run an external command
-    Done
-
-    (b) Run an external command by redirecting standard input from a file
-    Done
-
-    (c) Run an external command by redirecting standard output to a file
-    Done
-
-    (d) Combination of input and output redirection
-    Done
-
-    (e) Run an external command in the background with possible input and output redirections
-    TODO
-
-    (f) Run several external commands in the pipe mode
-    TODO
-
-    (g) Interrupting commands running in your shell (using signal call)
-    Control C with unexecuted commands
-
-    (h) Implementing cd and pwd
-    Done
-    cd and pwd implemented but some test cases needed to be checked for cd
-
-    (i) Handling wildcards in commands (‘*’ and ‘?’)
-    Done
-
-    (j) Implementing searching through history using up/down arrow keys
-    Done
-
-    (k) Command to detect a simple malware
-    TODO
-
-    (l) Command to check for file locks
-    TODO
-
-    (m) Features to help editing commands
-    TODO
-*/
-
 #include <iostream>
 #include <vector>
-#include <filesystem>
 #include <algorithm>
 #include <fstream>
 #include <queue>
 
 #include <stdlib.h>
 #include <cstring>
-#include <fnmatch.h>
 
 #include <sys/wait.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <dirent.h>
+#include <signal.h>
 
 #include <readline/readline.h>
+#include <filesystem>
+#include <fnmatch.h>
+#include <ncurses.h> 
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -82,6 +43,7 @@ struct Command
 {
     vector<string> args;
     string output_redirect, input_redirect;
+    bool background = false; 
 };
 vector<Command> parseInput(const string &user_input);
 
@@ -101,22 +63,6 @@ void ctrl_c_handler(int signum)
 void ctrl_z_handler(int signum)
 {
     ctrl_z_status = 1;
-}
-
-void pwd()
-{
-    fs::path cwd = fs::current_path();
-    cout << cwd.string() << endl;
-    fflush(stdout);
-}
-
-void cd(string dir)
-{
-    int status = chdir(dir.c_str());
-    if (status == -1)
-    {
-        cerr << "Unable to cd in " << dir << endl;
-    }
 }
 
 class CommandHistory
@@ -212,7 +158,16 @@ static int bind_down_arrow_key(int count, int key)
     return 0; 
 }
 
-void execute_process(const vector<Command> &cmds)
+void cd(string dir)
+{
+    int chdir_status = chdir(dir.c_str());
+    if (chdir_status == -1)
+    {
+        cerr << "Unable to cd in " << dir << endl;
+    }
+}
+
+void execute_process(vector<Command> &cmds)
 {
     int n = cmds.size(), pipefd[2];
 
@@ -258,38 +213,34 @@ void execute_process(const vector<Command> &cmds)
                 dup2(outfd, STDOUT_FILENO);
                 close(outfd);
             }
-            if (cmds[loop].args[0] == "pwd")
+
+            // Converting vector<string> to char *[] (c_string_args[
+            char *c_string_args[cmds[loop].args.size() + 1];
+            for (int i = 0; i < cmds[loop].args.size(); i++)
             {
-                pwd();
+                c_string_args[i] = (char *)malloc(cmds[loop].args[i].size() + 1);
+                for (int j = 0; j < cmds[loop].args[i].size() + 1; j++)
+                {
+                    c_string_args[i][j] = 0;
+                }
+                strcpy(c_string_args[i], cmds[loop].args[i].c_str());
             }
-            else
+            c_string_args[cmds[loop].args.size()] = NULL;
+
+            if (execvp(c_string_args[0], c_string_args) < 0)
             {
-                char *c_string_args[cmds[loop].args.size() + 1];
-                for (int i = 0; i < cmds[loop].args.size(); i++)
-                {
-                    c_string_args[i] = (char *)malloc(cmds[loop].args[i].size() + 1);
-                    for (int j = 0; j < cmds[loop].args[i].size() + 1; j++)
-                    {
-                        c_string_args[i][j] = 0;
-                    }
-                    strcpy(c_string_args[i], cmds[loop].args[i].c_str());
-                }
-                c_string_args[cmds[loop].args.size()] = NULL;
+                cerr << "Cannot Find Command : ";
+                for (auto &ele : cmds[loop].args)
+                    cerr << ele << " ";
+                cerr << endl;
+            }
 
-                if (execvp(c_string_args[0], c_string_args) < 0)
-                {
-                    cerr << "Cannot Find Command : ";
-                    for (auto &ele : cmds[loop].args)
-                        cerr << ele << " ";
-                    cerr << endl;
-                }
-
-                for (int i = 0; i < cmds[loop].args.size(); i++)
-                {
-                    free(c_string_args[i]);
-                }
+            for (int i = 0; i < cmds[loop].args.size(); i++)
+            {
+                free(c_string_args[i]);
             }
         }
+
         else if (childpid > 0)
         {
             close(pipefd[1]);
@@ -298,7 +249,7 @@ void execute_process(const vector<Command> &cmds)
             signal(SIGTSTP, ctrl_z_handler); // Ignore the SIGTSTP signal
 
             status = waitpid(childpid, NULL, WNOHANG);
-            while (status == 0 && ctrl_z_status == 0)
+            while (status == 0 && ctrl_z_status == 0 && cmds[loop].background == 0)
             {
                 status = waitpid(childpid, NULL, WNOHANG);
             }
@@ -312,11 +263,12 @@ int main()
     rl_bind_keyseq("\\e[A", bind_up_arrow_key);
     rl_bind_keyseq("\\e[B", bind_down_arrow_key);
 
+    signal (SIGTSTP, ctrl_c_handler); // Ignore the SIGTSTP signal
+    signal (SIGINT, ctrl_c_handler);  // Ignore the SIGINT signal
+
     // Loop means a single process
     while (1)
     {
-        signal(SIGINT, ctrl_c_handler);  // Ignore the SIGINT signal
-        signal(SIGTSTP, ctrl_c_handler); // Ignore the SIGTSTP signal
         string promptString = fs::current_path().string() + "$ ";
 
         char *userInput;
@@ -391,8 +343,20 @@ vector<Command> parseInput(const string &user_input)
             {
                 add_to_input = true;
             }
+            else if (token == "&")
+            {
+                current_command.background = true; 
+            }
             else
             {
+                if(token == "delep")
+                {
+                    token = "./delep";
+                }
+                else if(token == "pwd")
+                {
+                    token = "./pwd";
+                }
                 current_command.args.push_back(token);
             }
         }
