@@ -69,70 +69,70 @@ class CommandHistory
 {
     string history_file = "history.txt";
     int max_history_size = 1000;
-    int history_pointer = 0; 
+    int history_pointer = 0;
     deque<string> history_queue;
-    ofstream ofile; 
+    ofstream ofile;
 
-    public: 
-        CommandHistory()
+public:
+    CommandHistory()
+    {
+        ifstream file;
+        file.open(history_file);
+        if (file.is_open())
         {
-            ifstream file; 
-            file.open(history_file);
-            if(file.is_open())
+            string line;
+            while (getline(file, line))
             {
-                string line;
-                while(getline(file, line))
-                {
-                    history_queue.push_back(line);
-                }
-                file.close();
+                history_queue.push_back(line);
             }
-            reset_pointer();
+            file.close();
+        }
+        reset_pointer();
 
-            // For output in the file
-            ofile.open(history_file, std::ios_base::app);
-        }
-        string current_command()
+        // For output in the file
+        ofile.open(history_file, std::ios_base::app);
+    }
+    string current_command()
+    {
+        if (history_queue.size() == 0)
         {
-            if(history_queue.size() == 0)
-            {
-                return "";
-            }
-            return history_queue[history_pointer];
+            return "";
         }
-        void add_command(string command)
+        return history_queue[history_pointer];
+    }
+    void add_command(string command)
+    {
+        if (history_queue.size() == max_history_size)
         {
-            if(history_queue.size() == max_history_size)
-            {
-                history_queue.pop_front();
-            }
-            history_queue.push_back(command);
-            history_pointer = history_queue.size();
-            ofile << command << endl;
+            history_queue.pop_front();
         }
-        void reset_pointer()
+        history_queue.push_back(command);
+        history_pointer = history_queue.size();
+        ofile << command << endl;
+    }
+    void reset_pointer()
+    {
+        history_pointer = history_queue.size();
+    }
+    void decrease_pointer()
+    {
+        if (history_pointer > 0)
         {
-            history_pointer = history_queue.size();
+            history_pointer--;
         }
-        void decrease_pointer()
+    }
+    int increase_pointer()
+    {
+        if (history_pointer < history_queue.size() - 1)
         {
-            if(history_pointer > 0)
-            {
-                history_pointer--;
-            }
+            history_pointer++;
+            return 1;
         }
-        int increase_pointer()
+        else
         {
-            if(history_pointer < history_queue.size() - 1)
-            {
-                history_pointer++;
-                return 1; 
-            }
-            else
-            {
-                return 0; 
-            }
+            return 0;
         }
+    }
 };
 
 CommandHistory command_history;
@@ -141,12 +141,12 @@ static int bind_up_arrow_key(int count, int key)
 {
     command_history.decrease_pointer();
     rl_replace_line(command_history.current_command().c_str(), 0);
-    return 0; 
+    return 0;
 }
 
 static int bind_down_arrow_key(int count, int key)
 {
-    if(command_history.increase_pointer() == 0)
+    if (command_history.increase_pointer() == 0)
     {
         command_history.reset_pointer();
         rl_replace_line("", 0);
@@ -155,7 +155,7 @@ static int bind_down_arrow_key(int count, int key)
     {
         rl_replace_line(command_history.current_command().c_str(), 0);
     }
-    return 0; 
+    return 0;
 }
 
 void cd(string dir)
@@ -257,11 +257,25 @@ void execute_process(vector<Command> &cmds)
     }
 }
 
+static int ctrl_a_handler(int count, int key)
+{
+    rl_point = 0;
+    return 0;
+}
+
+static int ctrl_e_handler(int count, int key)
+{
+    rl_point = rl_end;
+    return 0;
+}
+
 int main()
 {
     rl_initialize();
     rl_bind_keyseq("\\e[A", bind_up_arrow_key);
     rl_bind_keyseq("\\e[B", bind_down_arrow_key);
+    rl_bind_keyseq("\\C-a", ctrl_a_handler);
+    rl_bind_keyseq("\\C-e", ctrl_e_handler);
 
     signal (SIGTSTP, ctrl_c_handler); // Ignore the SIGTSTP signal
     signal (SIGINT, ctrl_c_handler);  // Ignore the SIGINT signal
@@ -278,7 +292,7 @@ int main()
         string user_input;
         user_input.assign(userInput);
 
-        if(user_input != "")
+        if (user_input != "")
         {
             command_history.add_command(user_input);
         }
