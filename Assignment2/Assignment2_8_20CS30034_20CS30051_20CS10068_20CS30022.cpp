@@ -274,15 +274,13 @@ int main()
     rl_initialize();
     rl_bind_keyseq("\\e[A", bind_up_arrow_key);
     rl_bind_keyseq("\\e[B", bind_down_arrow_key);
-    rl_bind_keyseq("\\C-a", ctrl_a_handler);
     rl_bind_keyseq("\\C-e", ctrl_e_handler);
-
-    signal (SIGTSTP, ctrl_c_handler); // Ignore the SIGTSTP signal
-    signal (SIGINT, ctrl_c_handler);  // Ignore the SIGINT signal
 
     // Loop means a single process
     while (1)
     {
+        signal (SIGTSTP, SIG_IGN); // Ignore the SIGTSTP signal
+        signal (SIGINT, ctrl_c_handler);  // Ignore the SIGINT signal
         string promptString = fs::current_path().string() + "$ ";
 
         char *userInput;
