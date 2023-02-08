@@ -152,12 +152,18 @@ int main()
     rl_bind_keyseq("\\C-a", bind_ctrl_a_key);
     rl_bind_keyseq("\\C-e", bind_ctrl_e_key);
 
+    char hostname[1024];
+    char* username = getenv("USER");
+    gethostname(hostname, 1024);
+    string str(hostname), usernameString(username); 
+    string name = usernameString + "@" + str;
+
     // Loop means a single process
     while (1)
     {
         signal (SIGTSTP, SIG_IGN); // Ignore the SIGTSTP signal
         signal (SIGINT, ctrl_c_handler);  // Ignore the SIGINT signal
-        string promptString = fs::current_path().string() + "$ ";
+        string promptString =  "\033[1;35m" + name + ":\033[0m" + "\033[1;31m" + fs::current_path().string() + "$ " + "\033[0m";
 
         char *userInput;
         userInput = readline(promptString.c_str());
