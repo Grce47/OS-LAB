@@ -7,11 +7,6 @@
             Umang Singla
             Saurabh Das
             Mradul Agrawal
-
-    Compilation command:
-        g++ Assignment2_8_20CS30034_20CS30051_20CS10068_20CS30022.cpp -std=c++17 -lstdc++fs -lreadline -o a.out
-    Execution command:
-        ./a.out
 */
 
 #include <iostream>
@@ -37,6 +32,7 @@
 using namespace std;
 namespace fs = std::filesystem;
 
+// Parsing related functions
 void remove_excess_spaces(string &s);
 vector<string> find_files(char *);
 struct Command
@@ -46,6 +42,15 @@ struct Command
     bool background = false; 
 };
 vector<Command> parseInput(const string &user_input);
+
+// Readline key binding functions
+static int bind_up_arrow_key(int count, int key);
+static int bind_down_arrow_key(int count, int key);
+static int bind_ctrl_a_key(int count, int key);
+static int bind_ctrl_e_key(int count, int key); 
+
+// cd function
+void cd(string dir);
 
 int status, ctrl_z_status = 0;
 
@@ -137,144 +142,15 @@ public:
 
 CommandHistory command_history;
 
-static int bind_up_arrow_key(int count, int key)
-{
-    command_history.decrease_pointer();
-    rl_replace_line(command_history.current_command().c_str(), 0);
-    return 0;
-}
-
-static int bind_down_arrow_key(int count, int key)
-{
-    if (command_history.increase_pointer() == 0)
-    {
-        command_history.reset_pointer();
-        rl_replace_line("", 0);
-    }
-    else
-    {
-        rl_replace_line(command_history.current_command().c_str(), 0);
-    }
-    return 0;
-}
-
-void cd(string dir)
-{
-    int chdir_status = chdir(dir.c_str());
-    if (chdir_status == -1)
-    {
-        cerr << "Unable to cd in " << dir << endl;
-    }
-}
-
-void execute_process(vector<Command> &cmds)
-{
-    int n = cmds.size(), pipefd[2];
-
-    for (int loop = 0; loop < n; loop++)
-    {
-        int infd = STDIN_FILENO, outfd = STDOUT_FILENO;
-
-        if (cmds[loop].input_redirect != "")
-        {
-            infd = open(cmds[loop].input_redirect.c_str(), O_RDONLY, 0777);
-        }
-        if (cmds[loop].output_redirect != "")
-        {
-            outfd = open(cmds[loop].output_redirect.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_APPEND, 0777);
-        }
-
-        if (loop > 0)
-        {
-            infd = pipefd[0];
-        }
-        if (loop + 1 < n)
-        {
-            if (pipe(pipefd) == -1)
-            {
-                cerr << "PIPE NOT FORMED : ";
-                for (auto &ele : cmds[loop].args)
-                    cerr << ele << " ";
-                cerr << endl;
-            }
-            outfd = pipefd[1];
-        }
-
-        int childpid = fork();
-        if (childpid == 0)
-        {
-            if (infd != STDIN_FILENO)
-            {
-                dup2(infd, STDIN_FILENO);
-                close(infd);
-            }
-            if (outfd != STDOUT_FILENO)
-            {
-                dup2(outfd, STDOUT_FILENO);
-                close(outfd);
-            }
-
-            // Converting vector<string> to char *[] (c_string_args[
-            char *c_string_args[cmds[loop].args.size() + 1];
-            for (int i = 0; i < cmds[loop].args.size(); i++)
-            {
-                c_string_args[i] = (char *)malloc(cmds[loop].args[i].size() + 1);
-                for (int j = 0; j < cmds[loop].args[i].size() + 1; j++)
-                {
-                    c_string_args[i][j] = 0;
-                }
-                strcpy(c_string_args[i], cmds[loop].args[i].c_str());
-            }
-            c_string_args[cmds[loop].args.size()] = NULL;
-
-            if (execvp(c_string_args[0], c_string_args) < 0)
-            {
-                cerr << "Cannot Find Command : ";
-                for (auto &ele : cmds[loop].args)
-                    cerr << ele << " ";
-                cerr << endl;
-            }
-
-            for (int i = 0; i < cmds[loop].args.size(); i++)
-            {
-                free(c_string_args[i]);
-            }
-        }
-
-        else if (childpid > 0)
-        {
-            close(pipefd[1]);
-            ctrl_z_status = 0;
-            signal(SIGINT, SIG_IGN);         // Ignore the SIGINT signal
-            signal(SIGTSTP, ctrl_z_handler); // Ignore the SIGTSTP signal
-
-            status = waitpid(childpid, NULL, WNOHANG);
-            while (status == 0 && ctrl_z_status == 0 && cmds[loop].background == 0)
-            {
-                status = waitpid(childpid, NULL, WNOHANG);
-            }
-        }
-    }
-}
-
-static int ctrl_a_handler(int count, int key)
-{
-    rl_point = 0;
-    return 0;
-}
-
-static int ctrl_e_handler(int count, int key)
-{
-    rl_point = rl_end;
-    return 0;
-}
+void execute_process(vector<Command> &cmds);
 
 int main()
 {
     rl_initialize();
     rl_bind_keyseq("\\e[A", bind_up_arrow_key);
     rl_bind_keyseq("\\e[B", bind_down_arrow_key);
-    rl_bind_keyseq("\\C-e", ctrl_e_handler);
+    rl_bind_keyseq("\\C-a", bind_ctrl_a_key);
+    rl_bind_keyseq("\\C-e", bind_ctrl_e_key);
 
     // Loop means a single process
     while (1)
@@ -361,14 +237,6 @@ vector<Command> parseInput(const string &user_input)
             }
             else
             {
-                if(token == "delep")
-                {
-                    token = "./delep";
-                }
-                else if(token == "pwd")
-                {
-                    token = "./pwd";
-                }
                 current_command.args.push_back(token);
             }
         }
@@ -477,4 +345,136 @@ void remove_excess_spaces(string &s)
     string::iterator new_end = unique(s.begin(), s.end(), [](char lhs, char rhs)
                                       { return isspace(lhs) && isspace(rhs); });
     s.erase(new_end, s.end());
+}
+
+static int bind_up_arrow_key(int count, int key)
+{
+    command_history.decrease_pointer();
+    rl_replace_line(command_history.current_command().c_str(), 0);
+    return 0;
+}
+
+static int bind_down_arrow_key(int count, int key)
+{
+    if (command_history.increase_pointer() == 0)
+    {
+        command_history.reset_pointer();
+        rl_replace_line("", 0);
+    }
+    else
+    {
+        rl_replace_line(command_history.current_command().c_str(), 0);
+    }
+    return 0;
+}
+
+static int bind_ctrl_a_key(int count, int key)
+{
+    rl_point = 0;
+    return 0;
+}
+
+static int bind_ctrl_e_key(int count, int key)
+{
+    rl_point = rl_end;
+    return 0;
+}
+
+void cd(string dir)
+{
+    int chdir_status = chdir(dir.c_str());
+    if (chdir_status == -1)
+    {
+        cerr << "Unable to cd in " << dir << endl;
+    }
+}
+
+void execute_process(vector<Command> &cmds)
+{
+    int n = cmds.size(), pipefd[2];
+
+    for (int loop = 0; loop < n; loop++)
+    {
+        int infd = STDIN_FILENO, outfd = STDOUT_FILENO;
+
+        if (cmds[loop].input_redirect != "")
+        {
+            infd = open(cmds[loop].input_redirect.c_str(), O_RDONLY, 0777);
+        }
+        if (cmds[loop].output_redirect != "")
+        {
+            outfd = open(cmds[loop].output_redirect.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_APPEND, 0777);
+        }
+
+        if (loop > 0)
+        {
+            infd = pipefd[0];
+        }
+        if (loop + 1 < n)
+        {
+            if (pipe(pipefd) == -1)
+            {
+                cerr << "PIPE NOT FORMED : ";
+                for (auto &ele : cmds[loop].args)
+                    cerr << ele << " ";
+                cerr << endl;
+            }
+            outfd = pipefd[1];
+        }
+
+        int childpid = fork();
+        if (childpid == 0)
+        {
+            if (infd != STDIN_FILENO)
+            {
+                dup2(infd, STDIN_FILENO);
+                close(infd);
+            }
+            if (outfd != STDOUT_FILENO)
+            {
+                dup2(outfd, STDOUT_FILENO);
+                close(outfd);
+            }
+
+            // Converting vector<string> to char *[] (c_string_args[
+            char *c_string_args[cmds[loop].args.size() + 1];
+            for (int i = 0; i < cmds[loop].args.size(); i++)
+            {
+                c_string_args[i] = (char *)malloc(cmds[loop].args[i].size() + 1);
+                for (int j = 0; j < cmds[loop].args[i].size() + 1; j++)
+                {
+                    c_string_args[i][j] = 0;
+                }
+                strcpy(c_string_args[i], cmds[loop].args[i].c_str());
+            }
+            c_string_args[cmds[loop].args.size()] = NULL;
+
+            if (execvp(c_string_args[0], c_string_args) < 0)
+            {
+                cerr << "Cannot Find Command : ";
+                for (auto &ele : cmds[loop].args)
+                    cerr << ele << " ";
+                cerr << endl;
+            }
+
+            for (int i = 0; i < cmds[loop].args.size(); i++)
+            {
+                free(c_string_args[i]);
+            }
+        }
+
+        else if (childpid > 0)
+        {
+            close(pipefd[1]);
+            ctrl_z_status = 0;
+            signal(SIGINT, SIG_IGN);         // Ignore the SIGINT signal
+            signal(SIGTSTP, ctrl_z_handler); // Ignore the SIGTSTP signal
+
+            status = waitpid(childpid, NULL, WNOHANG);
+            while (status == 0 && ctrl_z_status == 0 && cmds[loop].background == 0)
+            {
+                status = waitpid(childpid, NULL, WNOHANG);
+            }
+        }
+    }
 }
