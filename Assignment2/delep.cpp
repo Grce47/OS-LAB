@@ -4,6 +4,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <signal.h>
+#include <sys/wait.h>
 
 using namespace std;
 
@@ -50,7 +51,6 @@ void fmatch(char* file, vector<int> &openpid, vector<int> &lockpid)
             if(strcmp(buf, file) != 0) continue;
             openpid.push_back(pid);
 
-            
             sprintf(path,"/proc/%d/fdinfo/%d", pid, fid);
             FILE *file_info = fopen(path, "r");
             if(file_info == NULL) continue;
@@ -69,29 +69,68 @@ void fmatch(char* file, vector<int> &openpid, vector<int> &lockpid)
 
 int main(int argc, char *argv[])
 {
-    vector<int> openpid, lockpid;
-    fmatch(argv[1], openpid, lockpid);
-    printf("\nProcesses using this file in open mode ::\n");
-    for(auto u: openpid) printf("%d ", u);
-    printf("\n\nProcesses using this file in lock mode ::\n");
-    for(auto u: lockpid) printf("%d ", u);
-    printf("\n\nDo you want to kill these processes? (yes/no) : ");
-    char prompt[4], c;
-    scanf("%[^\n]s", prompt);
-    scanf("%c", &c);
-    if(strcmp(prompt, "yes") == 0)
+    int fd[2];
+    pipe(fd);
+    if(fork() == 0)
     {
-        for(auto u: openpid)
+        vector<int> openpid, lockpid;
+        fmatch(argv[1], openpid, lockpid);
+        int arr1[openpid.size() + 1], arr2[lockpid.size() + 1];
+        for(int i = 0; i < openpid.size(); i++) arr1[i] = openpid[i];
+        arr1[openpid.size()] = -1;
+        for(int i = 0; i < lockpid.size(); i++) arr2[i] = lockpid[i];
+        arr2[lockpid.size()] = -1;
+        close(fd[0]);
+        close(1);
+        dup(fd[1]);
+        write(1, arr1, sizeof(arr1));
+        write(1, arr2, sizeof(arr2));
+        exit(0);
+    }
+    else
+    {
+        wait(NULL);
+        close(fd[1]);
+        dup2(0, fd[1]);
+        close(0);
+        dup(fd[0]);
+        vector<int> openpid, lockpid;
+        int arr[1000], change = 0;
+        int n = read(fd[0], arr, sizeof(arr));
+        for(int i = 0; i < n / 4; i++)
         {
-            if(kill(u, SIGKILL) == -1)
+            if(arr[i] == -1)
             {
-                printf("\nError killing process %d\n", u);
-                return 1;
+                change = 1;
+                continue;
             }
+            if(change == 0) openpid.push_back(arr[i]);
+            else lockpid.push_back(arr[i]);
         }
-        printf("All processes which opened the file are killed\n");
-        if(remove(argv[1]) == 0) printf("File deleted successfully\n");
-        else printf("Unable to delete the file\n");
+        close(0);
+        dup2(fd[1], 0);
+        printf("\nProcesses using this file in open mode ::\n");
+        for(auto u: openpid) printf("%d ", u);
+        printf("\n\nProcesses using this file in lock mode ::\n");
+        for(auto u: lockpid) printf("%d ", u);
+        printf("\n\nDo you want to kill these processes? (yes/no) : ");
+        char prompt[4], c;
+        scanf("%[^\n]s", prompt);
+        scanf("%c", &c);
+        if(strcmp(prompt, "yes") == 0)
+        {
+            for(auto u: openpid)
+            {
+                if(kill(u, SIGKILL) == -1)
+                {
+                    printf("\nError killing process %d\n", u);
+                    return 1;
+                }
+            }
+            printf("All processes which opened the file are killed\n");
+            if(remove(argv[1]) == 0) printf("File deleted successfully\n");
+            else printf("Unable to delete the file\n");
+        }
     }
     return 0;
 }
