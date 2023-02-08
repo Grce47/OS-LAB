@@ -44,10 +44,8 @@ void p_tree(map<int, vector<int>> &ptree, map<int, int> &par)
                 break;
             }
         }
-
         fclose(status_file);
     }
-
     closedir(dir);
 }
 
@@ -81,39 +79,44 @@ int main(int argc, char** argv)
     plist.push_back(pid);
     printf("\n");
 
-    int itr = 3;
-    vector<vector<int>> childCnt(itr);
-    for(int i = 0; i < itr; i++)
+    if(argc == 3 && strcmp(argv[2], "-suggest") == 0)
     {
-        for(auto u: plist)
+        int itr = 2;
+        vector<vector<int>> childCnt(itr);
+        vector<int> pidChildCnt;
+        for(int i = 0; i < itr; i++)
         {
-            int cnt = 0;
-            dfs(ptree, u, cnt);
-            printf("%d :: %d\n", u, cnt);
-            childCnt[i].push_back(cnt);
+            for(auto u: plist)
+            {
+                int cnt = 0;
+                dfs(ptree, u, cnt);
+                printf("%d :: %d ::: %d\n", u, cnt, ptree[u].size());
+                childCnt[i].push_back(cnt);
+                if(u == plist[0]) pidChildCnt.push_back(ptree[u].size());
+            }
+            printf("\n");
+
+            ptree.clear();
+            par.clear();
+
+            if(i == itr -  1) break;
+
+            sleep(20);
+            p_tree(ptree, par);
         }
-        printf("\n");
 
-        ptree.clear();
-        par.clear();
+        vector<double> heu;
+        heu.push_back(pidChildCnt.back() * 2.0 / (pidChildCnt[0] * itr));
+        for(int i = 1; i < childCnt[0].size(); i++)
+            heu.push_back((childCnt[itr - 1][i] * childCnt[0][i - 1]) / (double)(childCnt[itr - 1][i - 1] * childCnt[0][i]));
 
-        if(i == itr -  1) break;
-
-        sleep(20);
-        p_tree(ptree, par);
+        for(int i = heu.size() - 1; i >= 0; i--)
+            if(heu[i] > 1.5)
+            {
+                printf("Possible malware process is %d\n\n", plist[i]);
+                return 0;
+            }
+        printf("No malwares found\n\n");
     }
-
-    vector<double> heu;
-    heu.push_back((double)(childCnt[itr - 1][0] / childCnt[0][0]));
-    for(int i = 1; i < childCnt[0].size(); i++)
-        heu.push_back((childCnt[itr - 1][i] * childCnt[0][i - 1]) / (double)(childCnt[itr - 1][i - 1] * childCnt[0][i]));
-
-    for(int i = heu.size() - 1; i >= 0; i--)
-        if(heu[i] > 1.1)
-        {
-            printf("Possible malware process is %d\n\n", plist[i]);
-            return 0;
-        }
-    printf("No malwares found\n\n");
     return 0;
 }
