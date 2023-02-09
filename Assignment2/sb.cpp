@@ -8,10 +8,7 @@
 
 using namespace std;
 
-map<int, vector<int>> ptree;
-map<int, int> par;
-
-void p_tree()
+void p_tree(map<int, vector<int>> &ptree, map<int, int> &par)
 {
     DIR *dir = opendir("/proc");
     if(dir == NULL)
@@ -47,10 +44,8 @@ void p_tree()
                 break;
             }
         }
-
         fclose(status_file);
     }
-
     closedir(dir);
 }
 
@@ -69,7 +64,10 @@ int main(int argc, char** argv)
     pid = atoi(argv[1]);
     vector<int> plist;
 
-    p_tree();
+    map<int, vector<int>> ptree;
+    map<int, int> par;
+
+    p_tree(ptree, par);
 
     while(pid > 1)
     {
@@ -79,16 +77,46 @@ int main(int argc, char** argv)
         pid = ppid;
     }
     plist.push_back(pid);
-
     printf("\n");
 
-    for(auto u: plist)
+    if(argc == 3 && strcmp(argv[2], "-suggest") == 0)
     {
-        int cnt = 0;
-        // dfs(ptree, u, cnt);
-        // cnt = ptree[u].size();
-        printf("%d :: %d\n", u, cnt);
-    }
+        int itr = 2;
+        vector<vector<int>> childCnt(itr);
+        vector<int> pidChildCnt;
+        for(int i = 0; i < itr; i++)
+        {
+            for(auto u: plist)
+            {
+                int cnt = 0;
+                dfs(ptree, u, cnt);
+                printf("%d :: %d ::: %d\n", u, cnt, (int)ptree[u].size());
+                childCnt[i].push_back(cnt);
+                if(u == plist[0]) pidChildCnt.push_back(ptree[u].size());
+            }
+            printf("\n");
 
+            ptree.clear();
+            par.clear();
+
+            if(i == itr -  1) break;
+
+            sleep(20);
+            p_tree(ptree, par);
+        }
+
+        vector<double> heu;
+        heu.push_back((pidChildCnt.back() - pidChildCnt[0]) * 0.9 / itr);
+        for(int i = 1; i < childCnt[0].size(); i++)
+            heu.push_back((childCnt[itr - 1][i] * childCnt[0][i - 1]) / (double)(childCnt[itr - 1][i - 1] * childCnt[0][i]));
+
+        for(int i = heu.size() - 1; i >= 0; i--)
+            if(heu[i] > 1.1)
+            {
+                printf("Possible malware process is %d\n\n", plist[i]);
+                return 0;
+            }
+        printf("No malwares found\n\n");
+    }
     return 0;
 }
