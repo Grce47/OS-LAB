@@ -3,8 +3,9 @@ The heuristic for the squashbug is as follows:
 1) We decided to use the child process count because time for each process can vary as per the type of process (high for cpu intensive tasks and low for sleeping malwares).
 2) We checked the ratio of total children of a process to total children of its child process as obtained from the parent list of given pid.
 3) For the given malware, it is expected that total children of the process increase with time faster as compared to its non malware parent.
-4) Hence we check from init (1) process, then go down the tree. The anomaly is denoted a malware.
-5) This is repeated a few times for confirmation.
+4) If the given pid is the malware itself, we don't have details of its unique child process as it doesn't exist in the parent list of given pid. So, we use the count of its immediate child processes.
+5) Hence we check from init (1) process, then go down the tree. The anomaly is denoted a malware.
+6) This is repeated a few times for confirmation.
 
 
 Implementation:
