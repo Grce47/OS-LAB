@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <fstream>
 #include <queue>
+#include <set>
 
 #include <stdlib.h>
 #include <cstring>
@@ -31,6 +32,8 @@
 
 using namespace std;
 namespace fs = std::filesystem;
+
+set<int> child_processes;
 
 // Parsing related functions
 void remove_excess_spaces(string &s);
@@ -52,22 +55,35 @@ static int bind_ctrl_e_key(int count, int key);
 // cd function
 void cd(string dir);
 
-int status, ctrl_z_status = 0;
+int status, ctrl_z_status = 0, child_pid;
 
 void ctrl_c_handler(int signum)
 {
-    rl_replace_line("", 0);
-    rl_reset_line_state();
-    rl_redisplay();
-    cout << endl
-         << fs::current_path().string() << "$ ";
-    fflush(stdout);
+    if(child_pid > 0){
+        kill(child_pid, SIGKILL);
+    }else{
+        rl_replace_line("", 0);
+        rl_reset_line_state();
+        rl_redisplay();
+        cout << endl
+            << fs::current_path().string() << "$ ";
+        fflush(stdout);
+    }
     return;
+}
+
+void child_handler(int signum){
+    int status;
+    pid_t pid = waitpid(-1, &status, WNOHANG);
+    if(pid > 0){
+        child_processes.erase(pid);
+    }
 }
 
 void ctrl_z_handler(int signum)
 {
     ctrl_z_status = 1;
+    child_pid = 0;
 }
 
 class CommandHistory
@@ -151,6 +167,7 @@ int main()
     rl_bind_keyseq("\\e[B", bind_down_arrow_key);
     rl_bind_keyseq("\\C-a", bind_ctrl_a_key);
     rl_bind_keyseq("\\C-e", bind_ctrl_e_key);
+    signal(SIGCHLD, child_handler);
 
     char hostname[1024];
     char* username = getenv("USER");
@@ -161,6 +178,7 @@ int main()
     // Loop means a single process
     while (1)
     {
+        child_pid = 0;
         signal (SIGTSTP, SIG_IGN); // Ignore the SIGTSTP signal
         signal (SIGINT, ctrl_c_handler);  // Ignore the SIGINT signal
         string promptString =  "\033[1;35m" + name + ":\033[0m" + "\033[1;31m" + fs::current_path().string() + "$ " + "\033[0m";
@@ -431,6 +449,7 @@ void execute_process(vector<Command> &cmds)
         int childpid = fork();
         if (childpid == 0)
         {
+            signal(SIGINT, SIG_IGN);
             if (infd != STDIN_FILENO)
             {
                 dup2(infd, STDIN_FILENO);
@@ -473,8 +492,11 @@ void execute_process(vector<Command> &cmds)
         {
             close(pipefd[1]);
             ctrl_z_status = 0;
-            signal(SIGINT, SIG_IGN);         // Ignore the SIGINT signal
+            child_pid = childpid;
+            signal(SIGINT, ctrl_c_handler);         // Ignore the SIGINT signal
             signal(SIGTSTP, ctrl_z_handler); // Ignore the SIGTSTP signal
+
+            child_processes.insert(childpid);
 
             status = waitpid(childpid, NULL, WNOHANG);
             while (status == 0 && ctrl_z_status == 0 && cmds[loop].background == 0)
