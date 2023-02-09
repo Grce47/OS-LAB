@@ -7,6 +7,7 @@
 int main()
 {
     int x;
+    printf("%d\n", getpid());
     printf("%d\n",x = open("lock_test.txt", O_RDWR));
     // while(1);
     printf("%d\n",flock(x, LOCK_SH));
