@@ -106,12 +106,12 @@ int main(int argc, char** argv)
         }
 
         vector<double> heu;
-        heu.push_back(pidChildCnt.back() * 2.0 / (pidChildCnt[0] * itr));
+        heu.push_back((pidChildCnt.back() - pidChildCnt[0]) * 0.9 / itr);
         for(int i = 1; i < childCnt[0].size(); i++)
             heu.push_back((childCnt[itr - 1][i] * childCnt[0][i - 1]) / (double)(childCnt[itr - 1][i - 1] * childCnt[0][i]));
 
         for(int i = heu.size() - 1; i >= 0; i--)
-            if(heu[i] > 1.5)
+            if(heu[i] > 1.1)
             {
                 printf("Possible malware process is %d\n\n", plist[i]);
                 return 0;
