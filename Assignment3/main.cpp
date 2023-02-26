@@ -66,12 +66,11 @@ int main()
     Shared_mem_info shm_node_list(key_node_list, key_node_list_cap, key_node_no);
     Shared_mem_info shm_edge_list(key_edge_list, key_edge_list_cap, key_egde_no);
 
-    *shm_edge_list.size = 0;
-    *shm_node_list.size = 0;
+    int edge_size_shm = set_capacity(key_egde_no, 0);
+    int node_size_shm = set_capacity(key_node_no, 0);
 
     node *node_list = shared_memory_init<node>(shm_node_list, true, -1);
     node *edge_list = shared_memory_init<node>(shm_edge_list, true, -1);
-    node *starting_pointer = edge_list;
 
     ifstream is("facebook_combined.txt");
     int x, y;
@@ -142,12 +141,20 @@ int main()
             break;
     }
 
+    shmdt(shm_edge_list.capacity);
+    shmdt(shm_node_list.capacity);
+
+    shmdt(shm_edge_list.size);
+    shmdt(shm_node_list.size);
+
     shmdt(node_list);
     shmdt(edge_list);
     shmctl(shm_edge_list.shmid, IPC_RMID, NULL);
     shmctl(shm_node_list.shmid, IPC_RMID, NULL);
     shmctl(edge_cap_shm, IPC_RMID, NULL);
     shmctl(node_cap_shm, IPC_RMID, NULL);
+    shmctl(edge_size_shm, IPC_RMID, NULL);
+    shmctl(node_size_shm, IPC_RMID, NULL);
 
     return 0;
 }
