@@ -1,117 +1,153 @@
 #include <bits/stdc++.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include <sys/shm.h>
 #include <sys/wait.h>
+using namespace std;
 
-#define vert_cnt 80000
-#define edge_cnt 5000000
-#define consumer_cnt 10
+#define VERTEX_CNT 80000
+#define EDGE_CNT 5000000
+#define CONSUMER_CNT 10
 
-// Component of edge list
-struct node {
-    int vertex;
-    node* next;
+int set_capacity(key_t key, int val)
+{
+    int shmid = shmget(key, sizeof(int), IPC_CREAT | 0666);
+    if (shmid < 0)
+    {
+        cerr << "ERROR IN CAPACITY SETTING\n";
+        exit(EXIT_FAILURE);
+    }
+    int *cap = (int *)shmat(shmid, NULL, 0);
+    *cap = val;
+    shmdt(cap);
+    return shmid;
+}
+
+class Shared_mem_info
+{
+public:
+    int shmid, *capacity, *size;
+    key_t key;
+    Shared_mem_info(key_t _key, key_t _capacity_key, key_t _size_key)
+    {
+        shmid = -1;
+        key = _key;
+        capacity = (int *)shmat(shmget(_capacity_key, sizeof(int), IPC_CREAT | 0666), NULL, 0);
+        size = (int *)shmat(shmget(_size_key, sizeof(int), IPC_CREAT | 0666), NULL, 0);
+    }
 };
 
-// Function for adding new edges to adjacency list
-node* add_edge(int u, int v, node* edge_list)
+template <class T>
+T *shared_memory_init(Shared_mem_info &shm, bool intialize_to_null = false, int def_val = 0)
 {
-    edge_list[0].vertex = u;
-    edge_list[1].vertex = v;
-    return edge_list + 2;
+    shm.shmid = shmget(shm.key, (*shm.capacity) * sizeof(T), IPC_CREAT | 0666);
+    if (shm.shmid < 0)
+    {
+        cerr << "SHMID NOT MADE IN INIT\n";
+        exit(EXIT_FAILURE);
+    }
+    T *ptr = (T *)shmat(shm.shmid, NULL, 0);
+    if (intialize_to_null)
+        memset(ptr, def_val, (*shm.capacity) * sizeof(T));
+    return ptr;
 }
 
-// Function for modifying adjacency list to connect it with node list
-void process_edge(int u, int v, node* edge_list, node** node_list)
+struct node
 {
-    if(node_list[u] == NULL) node_list[u] = edge_list - 1;
-    else
-    {
-        node* temp = node_list[u];
-        node_list[u] = edge_list - 1;
-        node_list[u]->next = temp;
-    }
-    if(node_list[v] == NULL) node_list[v] = edge_list - 2;
-    else
-    {
-        node* temp = node_list[v];
-        node_list[v] = edge_list - 2;
-        node_list[v]->next = temp;
-    }
-}
+    int vertex, offset;
+};
 
 int main()
 {
-    key_t key1 = 200, key2 = 201;
-    int shmid1 = shmget(key1, vert_cnt, IPC_CREAT | 0666);
-    if(shmid1 < 0)
-    {
-        perror("Shared Memory 1 allocation failed\n");
-        exit(EXIT_FAILURE);
-    }
-    node** node_list = (node**)shmat(shmid1, NULL, 0);
-    memset(node_list, 0, vert_cnt);
+    key_t key_node_list = 200, key_node_list_cap = 201, key_node_no = 202;
+    key_t key_edge_list = 203, key_edge_list_cap = 204, key_egde_no = 205;
 
-    int shmid2 = shmget(key2, edge_cnt, IPC_CREAT | 0666);
-    if(shmid2 < 0)
-    {
-        perror("Shared Memory 2 allocation failed\n");
-        exit(EXIT_FAILURE);
-    }
-    node* edge_list = (node*)shmat(shmid2, NULL, 0);
-    memset(edge_list, 0, edge_cnt);
+    int edge_cap_shm = set_capacity(key_edge_list_cap, EDGE_CNT);
+    int node_cap_shm = set_capacity(key_node_list_cap, VERTEX_CNT);
 
-    FILE* ptr = fopen("facebook_combined.txt", "r");
-    char str[50];
-    if(ptr == NULL)
+    Shared_mem_info shm_node_list(key_node_list, key_node_list_cap, key_node_no);
+    Shared_mem_info shm_edge_list(key_edge_list, key_edge_list_cap, key_egde_no);
+
+    *shm_edge_list.size = 0;
+    *shm_node_list.size = 0;
+
+    node *node_list = shared_memory_init<node>(shm_node_list, true, -1);
+    node *edge_list = shared_memory_init<node>(shm_edge_list, true, -1);
+    node *starting_pointer = edge_list;
+
+    ifstream is("facebook_combined.txt");
+    int x, y;
+    while (is >> x >> y)
     {
-        perror("Graph file can't be opened\n");
-        exit(EXIT_FAILURE);
+        edge_list[*shm_edge_list.size].vertex = x;
+        edge_list[*shm_edge_list.size + 1].vertex = y;
+
+        if (node_list[x].vertex == -1)
+        {
+            node_list[x].vertex = x;
+            node_list[x].offset = *shm_edge_list.size + 1;
+            *shm_node_list.size = (*shm_node_list.size) + 1;
+        }
+        else
+        {
+            edge_list[*shm_edge_list.size + 1].offset = node_list[x].offset;
+            node_list[x].offset = *shm_edge_list.size + 1;
+        }
+
+        if (node_list[y].vertex == -1)
+        {
+            node_list[y].vertex = y;
+            node_list[y].offset = *shm_edge_list.size;
+            *shm_node_list.size = (*shm_node_list.size) + 1;
+        }
+        else
+        {
+            edge_list[*shm_edge_list.size].offset = node_list[y].offset;
+            node_list[y].offset = *shm_edge_list.size;
+        }
+
+        *shm_edge_list.size = (*shm_edge_list.size) + 2;
     }
-    while(fgets(str, 50, ptr) != NULL)
-    {
-        int x, y;
-        sscanf(str, "%d %d", &x, &y);
-        edge_list = add_edge(x, y, edge_list);
-        process_edge(x, y, edge_list, node_list);
-    }
-    fclose(ptr);
 
     // Uncomment below for printing adjacency list
-
-    // for(int ind = 0; node_list[ind] != NULL; ind++)
+    // for (int ind = 0; ind < (*shm_node_list.size); ind++)
     // {
-    //     printf("%d :: ", ind);
-    //     node* list_traverse = node_list[ind];
-    //     while(list_traverse != NULL)
+    //     cout << ind << " :: ";
+    //     int cur_off = node_list[ind].offset;
+    //     while (cur_off != -1)
     //     {
-    //         printf("%d ", list_traverse->vertex);
-    //         list_traverse = list_traverse->next;
+    //         cout << edge_list[cur_off].vertex << " ";
+    //         cur_off = edge_list[cur_off].offset;
     //     }
-    //     printf("\n");
+    //     cout << "\n";
     // }
 
-    if(fork() == 0)
+    if (fork() == 0)
     {
         // call the producer process
+        execvp("./producer.out", NULL);
         exit(EXIT_SUCCESS);
     }
 
-    for(int i = 0; i < consumer_cnt; i++)
+    for (int i = 0; i < CONSUMER_CNT; i++)
     {
-        if(fork() == 0)
+        if (fork() == 0)
         {
             // call the consumer process
             exit(EXIT_SUCCESS);
         }
     }
 
+    while (waitpid(-1, NULL, 0))
+    {
+        if (errno == ECHILD)
+            break;
+    }
+
     shmdt(node_list);
     shmdt(edge_list);
-    shmctl(shmid1, IPC_RMID, NULL);
-    shmctl(shmid2, IPC_RMID, NULL);
+    shmctl(shm_edge_list.shmid, IPC_RMID, NULL);
+    shmctl(shm_node_list.shmid, IPC_RMID, NULL);
+    shmctl(edge_cap_shm, IPC_RMID, NULL);
+    shmctl(node_cap_shm, IPC_RMID, NULL);
+
     return 0;
 }
