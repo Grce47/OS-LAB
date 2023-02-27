@@ -55,7 +55,7 @@ struct node
     int vertex, offset, map;
 };
 
-int main()
+int main(int argc, char *argv[])
 {
     key_t key_node_list = 200, key_node_list_cap = 201, key_node_no = 202;
     key_t key_edge_list = 203, key_edge_list_cap = 204, key_egde_no = 205;
@@ -131,11 +131,21 @@ int main()
         if (fork() == 0)
         {
             // call the consumer process
-            char **args = (char **)malloc(sizeof(char *) * 3);
-            args[2] = NULL;
-            args[1] = (char *)("outfiles/" + to_string(i) + ".txt").c_str();
-            args[0] = "./consumer.out";
-            execvp("./consumer.out", args);
+            if(argc < 2){
+                char **args = (char **)malloc(sizeof(char *) * 3);
+                args[2] = NULL;
+                args[1] = (char *)("outfiles/" + to_string(i) + ".txt").c_str();
+                args[0] = "./consumer.out";
+                execvp("./consumer.out", args);
+            }else{
+                char **args = (char **)malloc(sizeof(char *) * 4);
+                args[3] = NULL;
+                args[1] = (char *)("outfiles/" + to_string(i) + ".txt").c_str();
+                args[2] = argv[1];
+                args[0] = "./consumer.out";
+                execvp("./consumer.out", args);
+            }
+            
             exit(EXIT_SUCCESS);
         }
     }
