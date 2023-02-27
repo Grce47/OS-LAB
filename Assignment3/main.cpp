@@ -150,13 +150,8 @@ int main(int argc, char *argv[])
         }
     }
 
-    for (int i = 0; i <= 10; i++)
+    for (int i = 0; i <= CONSUMER_CNT; i++)
         wait(NULL);
-    // while (waitpid(-1, NULL, 0))
-    // {
-    //     if (errno == ECHILD)
-    //         break;
-    // }
 
     shmdt(shm_edge_list.capacity);
     shmdt(shm_node_list.capacity);
