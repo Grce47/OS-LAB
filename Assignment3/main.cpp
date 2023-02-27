@@ -52,7 +52,7 @@ T *shared_memory_init(Shared_mem_info &shm, bool intialize_to_null = false, int 
 
 struct node
 {
-    int vertex, offset;
+    int vertex, offset, map;
 };
 
 int main()
