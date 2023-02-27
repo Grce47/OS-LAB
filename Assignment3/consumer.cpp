@@ -18,53 +18,49 @@ int find(int sz, int map[], int val)
     return -1;
 }
 
-void djikstra(int **graph, int n, int start){
-    int visited[n] = {0};
+void djikstra(vector<vector<int>> &graph, int n, int start, int map[]){
+    vector<int> dist(n, INT_MAX);
+    vector<int> parent(n, -1);
 
-    int distance[n];
-    for(int i=0;i<n;i++){
-        distance[i] = INT_MAX;
-    }
-
-    visited[start] = 1;
-    int parent[n];
-    memset(parent, -1 , sizeof(parent));
+    priority_queue<pair<int, int>, vector<pair<int, int>>, greater<pair<int, int>>> pq;
+    pq.push({0, start});
+    dist[start] = 0;
     parent[start] = start;
 
-    distance[start] = 0;
-    for(int i=0;i<n;i++){
-        if(graph[start][i] == 1){
-            distance[i] = 1;
-            parent[i] = start;
-        }
-    }
+    while(!pq.empty()){
+        int u = pq.top().second;
+        int d_u = pq.top().first;
+        pq.pop();
 
-    for(int i=0;i<n-1;i++){
+        if(d_u != dist[u])
+            continue;
 
-        int v = 0;
-        int d = INT_MAX;
-
-        for(int i=0;i<n;i++){
-            if(visited[i] == 0 && distance[i] <= d){
-                v = i;
-                d = distance[i];
-            }
-        }
-
-        visited[v] = 1;
-
-        for(int i=0;i<n;i++){
-            if(visited[i] == 0 && graph[v][i] == 1){
-                if(distance[i] != INT_MAX){
-                    distance[i] = min(distance[i], distance[v] + 1)
-                    parent[i] = v;
-                }
+        for(auto v: graph[u]){
+            if(dist[v] > dist[u] + 1){
+                dist[v] = dist[u] + 1;
+                parent[v] = u;
+                pq.push({dist[v], v});
             }
         }
     }
 
     for(int i=0;i<n;i++){
-
+        int cur = i;
+        if(dist[cur] == INT_MAX)
+            continue;
+        if(i != start){
+            vector<int> path;
+            while(parent[cur] != cur){
+                path.push_back(cur);
+                cur = parent[cur];
+            }
+            path.push_back(cur);
+            reverse(path.begin(), path.end());
+            int n = path.size();
+            for(int i=0;i<n-1;i++)
+                cout << map[path[i]] << "--> ";
+            cout<<map[path[n-1]]<<endl;
+        }
     }
 }
 
@@ -119,7 +115,6 @@ int main()
 
     int map[n];
     int idx = 0;
-
     
     for(int i=0;i<*shm_node_list.size;i++)
     {
@@ -128,19 +123,13 @@ int main()
         if(node_list[i].map == -1)
         {
             map[idx] = i;
+            node_list[i].map = 1;
             idx++;
-            node_list[i] = 1;
         }
     }
 
-    int **graph;
-    graph = (int **)malloc(sizeof(int *)*idx);
-    for(int i=0;i<idx;i++)
-    {
-        graph[i] = (int *)malloc(sizeof(int)*idx);
-        for(int j=0;j<idx;j++)
-            graph[i][j] = 0;
-    }
+    vector<vector<int>> graph;
+    graph.resize(idx);
 
     for (int ind = 0; ind < (*shm_node_list.size); ind++)
     {
@@ -151,25 +140,19 @@ int main()
             int j = find(n, map, edge_list[cur_off].vertex);
             if(i != -1 && j != -1)
             {
-                graph[i][j] = 1;
-                graph[j][i] = 1;
+                graph[i].push_back(j);
+                graph[j].push_back(i);
             }
             cur_off = edge_list[cur_off].offset;
         }
     }
 
-    djikstra(graph, idx, 0);
-
     for(int i=0;i<idx;i++)
     {
-        free(graph[i]);
-        for(int j=0;j<idx;j++)
-            graph[i][j] = 0;
+        djikstra(graph, idx, 0, map);
     }
-    free(graph);
 
     shmdt(node_list);
     shmdt(edge_list);
-    shmdt(mapped);
     return 0;
 }

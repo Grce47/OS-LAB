@@ -126,11 +126,13 @@ int main()
         exit(EXIT_SUCCESS);
     }
 
+
     for (int i = 0; i < CONSUMER_CNT; i++)
     {
         if (fork() == 0)
         {
             // call the consumer process
+            execvp("./consumer.out", NULL);
             exit(EXIT_SUCCESS);
         }
     }
