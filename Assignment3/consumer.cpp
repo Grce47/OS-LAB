@@ -48,20 +48,22 @@ void djikstra(vector<vector<int>> &graph, int n, int start, vector<vector<int>> 
 }
 
 void optimizer(vector<vector<int>> &graph, int n, vector<vector<int>> &dist, vector<vector<int>> &parent,int new_n){
+    cout<<"optimizer"<<endl;
     for(int i=0;i<n;i++){
         for(int j=0;j<n;j++){
             for(int k = n - new_n; k < n; k++){
-                if(dist[i][j] > dist[k][i] + dist[k][j]){
-                    dist[i][j] = dist[i][k] + dist[k][j];
+                if(dist[k][i] != INT_MAX && dist[k][j] != INT_MAX && dist[i][j] > dist[k][i] + dist[k][j]){
+                    dist[i][j] = dist[k][i] + dist[k][j];
                     int cur = j;
                     while(cur != k){
-                        parent[i][k] = parent[k][cur];
+                        parent[i][cur] = parent[k][cur];
                         cur = parent[k][cur];
                     }
-                    cur = j;
+                    cout<<i<<" "<<j<<endl;
+                    cur = i;
                     while(cur != k){
                         parent[i][parent[k][cur]] = cur;
-                        cur = parent[i][k];
+                        cur = parent[k][cur];
                     }
                 }
             }
@@ -174,7 +176,9 @@ int main(int argc, char *argv[])
                 {
                     int cur = j;
                     if (dist[i][cur] == INT_MAX)
-                        cout<<map[i]<<endl;
+                    {
+                        continue;
+                    }
                     if (j != i)
                     {
                         vector<int> path;
@@ -203,6 +207,7 @@ int main(int argc, char *argv[])
         vector<vector<int>> graph;
         vector<vector<int>> dist, parent;
         while(1){
+            n = *shm_node_list.size / 10;
             map = (int *)realloc(map, n*(sizeof(int)));
             for (int i = 0; i < *shm_node_list.size; i++)
             {
@@ -215,6 +220,8 @@ int main(int argc, char *argv[])
                     idx++;
                 }
             }
+
+            cout<<*shm_node_list.size<<" "<<idx<<endl;
 
             graph.resize(idx);
             dist.resize(idx);
@@ -237,19 +244,26 @@ int main(int argc, char *argv[])
                 }
             }
 
+            cout<<'b'<<endl;
+
 
             for (int i = prev_idx; i < idx; i++)
             {
                 djikstra(graph, idx, i, dist, parent);
             }
 
+            cout<<'a'<<endl;
+            optimizer(graph, idx, dist, parent, (idx - prev_idx));
+
             for (int i = 0; i < idx; i++)
             {
                 for (int j = 0; j < idx; j++)
                 {
                     int cur = j;
-                    if (dist[i][cur] == INT_MAX)
+                    if (dist[i][cur] == INT_MAX){
+                        cout<<map[i]<<endl;
                         continue;
+                    }
                     if (j != i)
                     {
                         vector<int> path;
