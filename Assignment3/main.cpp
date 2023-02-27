@@ -126,22 +126,27 @@ int main()
         exit(EXIT_SUCCESS);
     }
 
-
     for (int i = 0; i < CONSUMER_CNT; i++)
     {
         if (fork() == 0)
         {
             // call the consumer process
-            execvp("./consumer.out", NULL);
+            char **args = (char **)malloc(sizeof(char *) * 3);
+            args[2] = NULL;
+            args[1] = (char *)("outfiles/" + to_string(i) + ".txt").c_str();
+            args[0] = "./consumer.out";
+            execvp("./consumer.out", args);
             exit(EXIT_SUCCESS);
         }
     }
 
-    while (waitpid(-1, NULL, 0))
-    {
-        if (errno == ECHILD)
-            break;
-    }
+    for (int i = 0; i <= 10; i++)
+        wait(NULL);
+    // while (waitpid(-1, NULL, 0))
+    // {
+    //     if (errno == ECHILD)
+    //         break;
+    // }
 
     shmdt(shm_edge_list.capacity);
     shmdt(shm_node_list.capacity);

@@ -37,6 +37,35 @@ T *shared_memory_init(Shared_mem_info &shm, bool intialize_to_null = false)
     return ptr;
 }
 
+template <class T>
+T *shared_memory_realloc(T *ptr, int new_size, Shared_mem_info &shm)
+{
+    T *arr = (T *)malloc(*shm.capacity * sizeof(T));
+    for (int i = 0; i < *shm.capacity; i++)
+        arr[i] = ptr[i];
+
+    shmdt(ptr);
+    shmctl(shm.shmid, IPC_RMID, NULL);
+
+    shm.shmid = shmget(shm.key, new_size * sizeof(T), IPC_CREAT | 0666);
+    if (shm.shmid == -1)
+    {
+        cerr << "SHMID NOT MADE IN REALLOC\n";
+        exit(EXIT_FAILURE);
+    }
+
+    ptr = (T *)shmat(shm.shmid, NULL, 0);
+
+    for (int i = 0; i < *shm.capacity; i++)
+        ptr[i] = arr[i];
+
+    free(arr);
+
+    *shm.capacity = new_size;
+    return ptr;
+}
+
+// Component of edge list
 struct node
 {
     int vertex, offset, map;
@@ -89,11 +118,19 @@ int main()
 
     while (1)
     {
+        cout << "PRODUCER WAKE";
 
         int m = rand_num(10, 30);
 
         for (int i = 0; i < m; i++)
         {
+            // add
+            if (*shm_node_list.size >= *shm_node_list.capacity)
+            {
+                // realloc
+                node_list = shared_memory_realloc<node>(node_list, *shm_node_list.capacity + 50, shm_node_list);
+            }
+
             node_list[*shm_node_list.size].vertex = *shm_node_list.size;
             int x = *shm_node_list.size;
             *shm_node_list.size = (*shm_node_list.size) + 1;
@@ -102,40 +139,53 @@ int main()
             int k = rand_num(1, 20);
             for (int j = 0; j < k; j++)
             {
+                // rand
                 vector<long long> pref(degree.begin(), degree.end());
                 partial_sum(degree.begin(), degree.end(), pref.begin());
 
                 long long random_index = rand_num(1, pref.back());
                 int y = --upper_bound(pref.begin(), pref.end(), random_index) - pref.begin();
 
-                degree[x]++;
-                degree[y]++;
-                edge_list[*shm_edge_list.size].vertex = x;
-                edge_list[*shm_edge_list.size + 1].vertex = y;
+                {
+                    degree[x]++;
+                    degree[y]++;
 
-                edge_list[*shm_edge_list.size + 1].offset = node_list[x].offset;
-                node_list[x].offset = *shm_edge_list.size + 1;
+                    if (*shm_edge_list.size >= (*shm_edge_list.size))
+                        edge_list = shared_memory_realloc<node>(edge_list, *shm_edge_list.capacity + 50, shm_edge_list);
 
-                edge_list[*shm_edge_list.size].offset = node_list[y].offset;
-                node_list[y].offset = *shm_edge_list.size;
+                    edge_list[*shm_edge_list.size].vertex = x;
+                    edge_list[*shm_edge_list.size + 1].vertex = y;
 
-                *shm_edge_list.size = (*shm_edge_list.size) + 2;
+                    if (node_list[x].vertex == -1)
+                    {
+                        node_list[x].vertex = x;
+                        node_list[x].offset = *shm_edge_list.size + 1;
+                        *shm_node_list.size = (*shm_node_list.size) + 1;
+                    }
+                    else
+                    {
+                        edge_list[*shm_edge_list.size + 1].offset = node_list[x].offset;
+                        node_list[x].offset = *shm_edge_list.size + 1;
+                    }
+
+                    if (node_list[y].vertex == -1)
+                    {
+                        node_list[y].vertex = y;
+                        node_list[y].offset = *shm_edge_list.size;
+                        *shm_node_list.size = (*shm_node_list.size) + 1;
+                    }
+                    else
+                    {
+                        edge_list[*shm_edge_list.size].offset = node_list[y].offset;
+                        node_list[y].offset = *shm_edge_list.size;
+                    }
+
+                    *shm_edge_list.size = (*shm_edge_list.size) + 2;
+                }
             }
         }
 
-        for (int i = 0; i < (*shm_node_list.size); i++)
-        {
-            cout << i << " :: ";
-            int cur_off = node_list[i].offset;
-            while (cur_off != -1)
-            {
-                cout << edge_list[cur_off].vertex << " ";
-                cur_off = edge_list[cur_off].offset;
-            }
-            cout << "\n";
-        }
-        cout << "\n";
-        sleep(50);
+        sleep(5);
     }
 
     shmdt(node_list);

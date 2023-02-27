@@ -10,15 +10,16 @@ using namespace std;
 
 int find(int sz, int map[], int val)
 {
-    for(int i=0;i<sz;i++)
+    for (int i = 0; i < sz; i++)
     {
-        if(map[i] == val)
+        if (map[i] == val)
             return i;
     }
     return -1;
 }
 
-void djikstra(vector<vector<int>> &graph, int n, int start, int map[]){
+void djikstra(vector<vector<int>> &graph, int n, int start, int map[])
+{
     vector<int> dist(n, INT_MAX);
     vector<int> parent(n, -1);
 
@@ -27,16 +28,19 @@ void djikstra(vector<vector<int>> &graph, int n, int start, int map[]){
     dist[start] = 0;
     parent[start] = start;
 
-    while(!pq.empty()){
+    while (!pq.empty())
+    {
         int u = pq.top().second;
         int d_u = pq.top().first;
         pq.pop();
 
-        if(d_u != dist[u])
+        if (d_u != dist[u])
             continue;
 
-        for(auto v: graph[u]){
-            if(dist[v] > dist[u] + 1){
+        for (auto v : graph[u])
+        {
+            if (dist[v] > dist[u] + 1)
+            {
                 dist[v] = dist[u] + 1;
                 parent[v] = u;
                 pq.push({dist[v], v});
@@ -44,22 +48,25 @@ void djikstra(vector<vector<int>> &graph, int n, int start, int map[]){
         }
     }
 
-    for(int i=0;i<n;i++){
+    for (int i = 0; i < n; i++)
+    {
         int cur = i;
-        if(dist[cur] == INT_MAX)
+        if (dist[cur] == INT_MAX)
             continue;
-        if(i != start){
+        if (i != start)
+        {
             vector<int> path;
-            while(parent[cur] != cur){
+            while (parent[cur] != cur)
+            {
                 path.push_back(cur);
                 cur = parent[cur];
             }
             path.push_back(cur);
             reverse(path.begin(), path.end());
             int n = path.size();
-            for(int i=0;i<n-1;i++)
+            for (int i = 0; i < n - 1; i++)
                 cout << map[path[i]] << "--> ";
-            cout<<map[path[n-1]]<<endl;
+            cout << map[path[n - 1]] << endl;
         }
     }
 }
@@ -100,9 +107,9 @@ struct node
     int vertex, offset, map;
 };
 
-
-int main()
+int main(int argc, char *argv[])
 {
+    freopen(argv[1], "w", stdout);
     Shared_mem_info shm_node_list(200, 201, 202);
     Shared_mem_info shm_edge_list(203, 204, 205);
 
@@ -110,17 +117,16 @@ int main()
 
     node *edge_list = shared_memory_init<node>(shm_edge_list);
 
-
-    int n = *shm_node_list.size/10;
+    int n = *shm_node_list.size / 10;
 
     int map[n];
     int idx = 0;
-    
-    for(int i=0;i<*shm_node_list.size;i++)
+
+    for (int i = 0; i < *shm_node_list.size; i++)
     {
-        if(idx == n)
+        if (idx == n)
             break;
-        if(node_list[i].map == -1)
+        if (node_list[i].map == -1)
         {
             map[idx] = i;
             node_list[i].map = 1;
@@ -138,7 +144,7 @@ int main()
         {
             int i = find(n, map, ind);
             int j = find(n, map, edge_list[cur_off].vertex);
-            if(i != -1 && j != -1)
+            if (i != -1 && j != -1)
             {
                 graph[i].push_back(j);
                 graph[j].push_back(i);
@@ -147,7 +153,7 @@ int main()
         }
     }
 
-    for(int i=0;i<idx;i++)
+    for (int i = 0; i < idx; i++)
     {
         djikstra(graph, idx, 0, map);
     }
