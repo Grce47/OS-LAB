@@ -41,21 +41,12 @@ struct action
 };
 
 // Comparator Class
-class Compare_P
+class Compare
 {
 public:
     bool operator()(action A, action B)
     {
         return A.priority < B.priority;
-    }
-};
-
-class Compare_T
-{
-public:
-    bool operator()(action A, action B)
-    {
-        return A.action_time < B.action_time;
     }
 };
 
@@ -73,20 +64,7 @@ public:
     queue<action> wall;
 
     // Feed Queue
-    priority_queue<action, vector<action>, Compare_T> feed_t;
-    priority_queue<action, vector<action>, Compare_P> feed_p;
-
-    void push_feed_queue(action act)
-    {
-        if (order == 0)
-        {
-            feed_p.push(act);
-        }
-        else
-        {
-            feed_t.push(act);
-        }
-    }
+    priority_queue<action, vector<action>, Compare> feed;
 
     Node()
     {
@@ -170,7 +148,7 @@ void *thread_userSimulator(void *arg)
                 // Get the action_id (it is different for each node and each event)
                 act.action_id = nodes[randnode].count_actions[randaction];
                 nodes[randnode].count_actions[randaction]++;
-                act.action_time = time(NULL);
+                act.action_time = time(0);
                 if (nodes[randnode].order == CHRONOLOGICAL)
                 {
                     act.priority = act.action_time;
@@ -213,7 +191,7 @@ void *thread_pushUpdate(void *arg)
                 {
                     act.priority = common_edges[make_pair(act.user_id, neigh)];
                 }
-                nodes[neigh].push_feed_queue(act);
+                nodes[neigh].feed.push(act); 
                 sprintf(buffer, "::PUSH_UPDATE Dequeue Node %d Neighbour %d::\n", act.user_id, neigh);
                 len = sizeof(char) * strlen(buffer);
                 fwrite(buffer, sizeof(char), len, snsfile);
@@ -231,7 +209,21 @@ void *thread_readPost(void *arg)
     {
         for (int i = 0; i < num_nodes; i++)
         {
-            // if(nodes[i].count_actions)
+            if(!nodes[i].feed.empty())
+            {
+                sprintf(buffer, "::READ_POST Reading feed queue of %d::\n", i);
+                len = sizeof(char) * strlen(buffer);
+                fwrite(buffer, sizeof(char), len, snsfile);
+                while(!nodes[i].feed.empty())
+                {
+                    action curr_act = nodes[i].feed.top(); 
+                    nodes[i].feed.pop(); 
+                    sprintf(buffer, "::READ_POST I read action number %d of type %d posted by user %d at time %d::\n", curr_act.action_id, curr_act.action_type, curr_act.user_id, (int) curr_act.action_time);
+                    len = sizeof(char) * strlen(buffer);
+                    fwrite(buffer, sizeof(char), len, snsfile);
+                }   
+                break; 
+            }
         }
     }
     pthread_exit(0);
