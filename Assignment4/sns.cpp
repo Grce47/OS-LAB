@@ -6,9 +6,15 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <time.h>
+#include <string.h>
 #include <queue>
+#include <map>
+#include <set>
 
 using namespace std;
+
+#define PRIORITY 0
+#define CHRONOLOGICAL 1
 
 const int NUM_ACTION = 3;   // 3 actions
 const int SLEEP_TIME = 120; // 120 seconds
@@ -19,10 +25,10 @@ const int NUM_PUSH_UPDATE_THREAD = 25;
 const int num_edges = 289003;
 const int num_nodes = 37700;
 const string csv_file_path = "musae_git_edges.csv";
-const string sns_file_path = "sns.log";
+const char *sns_file_path = "sns.log";
 
 // GLOBAL FILE
-ofstream snsfile(sns_file_path);
+FILE *snsfile = fopen(sns_file_path, "wb");
 
 // ACTION STRUCT
 struct action
@@ -31,6 +37,26 @@ struct action
     int action_id;
     int action_type;
     time_t action_time;
+    int priority;
+};
+
+// Comparator Class
+class Compare_P
+{
+public:
+    bool operator()(action A, action B)
+    {
+        return A.priority < B.priority;
+    }
+};
+
+class Compare_T
+{
+public:
+    bool operator()(action A, action B)
+    {
+        return A.action_time < B.action_time;
+    }
 };
 
 // NODE CLASS
@@ -40,10 +66,27 @@ public:
     int order;
     int count_actions[NUM_ACTION];
 
+    // Dynamic computation;
+    bool computed;
+
     // Wall Queue
     queue<action> wall;
+
     // Feed Queue
-    queue<action> feed;
+    priority_queue<action, vector<action>, Compare_T> feed_t;
+    priority_queue<action, vector<action>, Compare_P> feed_p;
+
+    void push_feed_queue(action act)
+    {
+        if (order == 0)
+        {
+            feed_p.push(act);
+        }
+        else
+        {
+            feed_t.push(act);
+        }
+    }
 
     Node()
     {
@@ -53,6 +96,7 @@ public:
         }
         int randorder = rand() % 2;
         order = randorder;
+        computed = false;
     }
 };
 
@@ -60,29 +104,61 @@ public:
 vector<vector<int>> graph(num_nodes);
 vector<int> degree(num_nodes, 0);
 vector<Node> nodes(num_nodes, Node());
+map<pair<int, int>, int> common_edges;
+set<int> neighbours[num_nodes];
 
-// Shared queue
-queue<Node> shared_queue; 
+// SHARED QUEUE
+queue<action> live_action;
 
 // THREAD FUNCTIONS
 void *thread_userSimulator(void *arg)
 {
+    char buffer[100];
+    int len;
     // 100 nodes * n actions then 2 minute sleep
     while (1)
     {
-        cout << "User simulator wakes..." << endl;
-        snsfile << "USER SIMULATER WAKES" << endl;
+        sprintf(buffer, "::USER_SIMULATOR_WAKES::\n");
+        len = sizeof(char) * strlen(buffer);
+        fwrite(buffer, sizeof(char), len, snsfile);
+        fwrite(buffer, sizeof(char), len, stdout);
         // Select 100 random nodes
         for (int i = 0; i < 100; i++)
         {
             int randnode = rand() % num_nodes;
+
+            // Do the precomputation for this node
+            if (nodes[randnode].computed == false)
+            {
+                for (auto neigh : graph[randnode])
+                {
+                    set<int> common;
+                    for (auto ch : neighbours[randnode])
+                    {
+                        if (neighbours[neigh].count(ch))
+                        {
+                            common.insert(ch);
+                        }
+                    }
+                    common_edges[make_pair(randnode, neigh)] = (int)common.size();
+                    common_edges[make_pair(neigh, randnode)] = (int)common.size();
+                }
+                nodes[randnode].computed = true;
+            }
+
             int node_degree = degree[randnode];
             int proportion_constant = 1;
             int proportion_value = (int)log2(node_degree);
             int num_actions = proportion_constant * proportion_value;
-            snsfile << "::Random Node: " << randnode << "::" << endl;
-            snsfile << "::Node Degree: " << node_degree << "::" << endl;
-            snsfile << "::Actions Generated: " << num_actions << "::" << endl;
+            sprintf(buffer, "::USER_SIMULATOR Random Node %d::\n", randnode);
+            len = sizeof(char) * strlen(buffer);
+            fwrite(buffer, sizeof(char), len, snsfile);
+            sprintf(buffer, "::USER_SIMULATOR Node Degree %d::\n", node_degree);
+            len = sizeof(char) * strlen(buffer);
+            fwrite(buffer, sizeof(char), len, snsfile);
+            sprintf(buffer, "::USER_SIMULATOR Actions Generated: %d::\n", num_actions);
+            len = sizeof(char) * strlen(buffer);
+            fwrite(buffer, sizeof(char), len, snsfile);
             // Each of the num_actions
             for (int j = 0; j < num_actions; j++)
             {
@@ -95,39 +171,75 @@ void *thread_userSimulator(void *arg)
                 act.action_id = nodes[randnode].count_actions[randaction];
                 nodes[randnode].count_actions[randaction]++;
                 act.action_time = time(NULL);
+                if (nodes[randnode].order == CHRONOLOGICAL)
+                {
+                    act.priority = act.action_time;
+                }
                 // Push the action to wall queue of that node
                 nodes[randnode].wall.push(act);
+                // Push the action to live_action queue
+                live_action.push(act);
             }
         }
-        cout << "User simulator sleeps..." << endl;
-        snsfile << "USER SIMULATER SLEEPS" << endl;
+        sprintf(buffer, "::USER_SIMULATOR_SLEEPS::\n");
+        len = sizeof(char) * strlen(buffer);
+        fwrite(buffer, sizeof(char), len, snsfile);
+        fwrite(buffer, sizeof(char), len, stdout);
         // Sleep for 2 minutes
         sleep(SLEEP_TIME);
     }
     pthread_exit(0);
 }
 
-void *thread_readPost(void *arg)
+void *thread_pushUpdate(void *arg)
 {
-    while(1)
+    char buffer[100];
+    int len;
+    while (1)
     {
-        if(!shared_queue.empty())
+        // Check if the shared queue is containing some element
+        if (!live_action.empty())
         {
-            
+            struct action act = live_action.front();
+            live_action.pop();
+            sprintf(buffer, "::PUSH_UPDATE Dequeue Node %d::\n", act.user_id);
+            len = sizeof(char) * strlen(buffer);
+            fwrite(buffer, sizeof(char), len, snsfile);
+            // Add this action to all the neighbours of the node
+            int act_node = act.user_id;
+            for (auto neigh : graph[act_node])
+            {
+                if (nodes[neigh].order == PRIORITY)
+                {
+                    act.priority = common_edges[make_pair(act.user_id, neigh)];
+                }
+                nodes[neigh].push_feed_queue(act);
+                sprintf(buffer, "::PUSH_UPDATE Dequeue Node %d Neighbour %d::\n", act.user_id, neigh);
+                len = sizeof(char) * strlen(buffer);
+                fwrite(buffer, sizeof(char), len, snsfile);
+            }
         }
     }
     pthread_exit(0);
 }
 
-void *thread_pushUpdate(void *arg)
+void *thread_readPost(void *arg)
 {
-
+    char buffer[100];
+    int len;
+    while (1)
+    {
+        for (int i = 0; i < num_nodes; i++)
+        {
+            // if(nodes[i].count_actions)
+        }
+    }
     pthread_exit(0);
 }
 
 int main(int argc, char **argv)
 {
-    cout << "Main thread started..." << endl;
+    cout << "::MAIN_THREAD_STARTED::" << endl;
 
     // Read the CSV file and load the graph
     vector<pair<int, int>> edges;
@@ -163,6 +275,13 @@ int main(int argc, char **argv)
     {
         degree[it.first]++;
         degree[it.second]++;
+    }
+    for (int i = 0; i < num_nodes; i++)
+    {
+        for (auto it : graph[i])
+        {
+            neighbours[i].insert(it);
+        }
     }
 
     // Spawn the threads and wait for them

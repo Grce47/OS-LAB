@@ -2,6 +2,8 @@
   "C_Cpp.errorSquiggles": "disabled",
   "files.associations": {
     "stdlib.h": "c",
-    "iostream": "cpp"
+    "iostream": "cpp",
+    "bitset": "cpp",
+    "set": "cpp"
   }
 }
