@@ -1,4 +1,0 @@
-/home/umang/OS-LAB/Assignment2/a.out
-ps
-ps
-ps
