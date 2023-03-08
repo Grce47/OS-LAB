@@ -19,16 +19,13 @@ using namespace std;
 const int NUM_ACTION = 3;   // 3 actions
 const int SLEEP_TIME = 120; // 120 seconds
 
-const int NUM_READ_POST_THREAD = 10;
-const int NUM_PUSH_UPDATE_THREAD = 25;
+const int NUM_READ_POST_THREAD = 10;   // 10 threads
+const int NUM_PUSH_UPDATE_THREAD = 25; // 25 threads
 
 const int num_edges = 289003;
 const int num_nodes = 37700;
 const string csv_file_path = "musae_git_edges.csv";
 const char *sns_file_path = "sns.log";
-
-// GLOBAL FILE
-FILE *snsfile = fopen(sns_file_path, "wb");
 
 // ACTION STRUCT
 struct action
@@ -78,15 +75,47 @@ public:
     }
 };
 
+// GLOBAL FILE
+FILE *snsfile = fopen(sns_file_path, "wb");
+
 // GLOBAL VARIABLES
+vector<Node> nodes(num_nodes, Node());
+
+/**
+ * Static variables related to graph
+ * Remain unchanged after once created in the main thread
+ * graph: adjacency list representation of the given graph data
+ * degree: stores degree of each node
+ * common_edges: number of common edges between 2 nodes
+    - Dynamically filled when userSimulator thread push some nodes
+    - Used by the pushUpdate thread when pushing actions of a node
+    - Although the data strucutre is shared between these threads there will not be any race condition
+    - As a node is accessed by the pushUpdate thread only when it is created by the userSimulator thread
+ * neighbours: set of neighbours of a particular node (used for the computation of common_edges)
+*/
 vector<vector<int>> graph(num_nodes);
 vector<int> degree(num_nodes, 0);
-vector<Node> nodes(num_nodes, Node());
 map<pair<int, int>, int> common_edges;
 set<int> neighbours[num_nodes];
 
-// SHARED QUEUE
+/**
+ * Shared queue for sharing actions
+ * Producer: userSimulator thread
+ * Consumer: pushUpdate thread
+ **/
 queue<action> live_action;
+pthread_mutex_t live_action_mutex;
+pthread_cond_t live_action_cond;
+int live_action_size;
+
+pthread_mutex_t feed_queue_mutex[num_nodes];
+pthread_cond_t feed_queue_cond[num_nodes];
+int feed_queue_size[num_nodes];
+
+queue<int> live_neighbour;
+pthread_mutex_t live_neighbour_mutex;
+pthread_cond_t live_neighbour_cond;
+int live_neighbour_size;
 
 // THREAD FUNCTIONS
 void *thread_userSimulator(void *arg)
@@ -128,13 +157,7 @@ void *thread_userSimulator(void *arg)
             int proportion_constant = 1;
             int proportion_value = (int)log2(node_degree);
             int num_actions = proportion_constant * proportion_value;
-            sprintf(buffer, "::USER_SIMULATOR Random Node %d::\n", randnode);
-            len = sizeof(char) * strlen(buffer);
-            fwrite(buffer, sizeof(char), len, snsfile);
-            sprintf(buffer, "::USER_SIMULATOR Node Degree %d::\n", node_degree);
-            len = sizeof(char) * strlen(buffer);
-            fwrite(buffer, sizeof(char), len, snsfile);
-            sprintf(buffer, "::USER_SIMULATOR Actions Generated: %d::\n", num_actions);
+            sprintf(buffer, "::USER_SIMULATOR Random Node %-5d Node Degree %-5d Actions Generated %-5d::\n", randnode, node_degree, num_actions);
             len = sizeof(char) * strlen(buffer);
             fwrite(buffer, sizeof(char), len, snsfile);
             // Each of the num_actions
@@ -155,8 +178,15 @@ void *thread_userSimulator(void *arg)
                 }
                 // Push the action to wall queue of that node
                 nodes[randnode].wall.push(act);
+
+                // ******* CRITICAL SECTION BEGINS *******
+                pthread_mutex_lock(&live_action_mutex);
                 // Push the action to live_action queue
                 live_action.push(act);
+                live_action_size++;
+                pthread_cond_signal(&live_action_cond);
+                pthread_mutex_unlock(&live_action_mutex);
+                // ******* CRITICAL SECTION ENDS *******
             }
         }
         sprintf(buffer, "::USER_SIMULATOR_SLEEPS::\n");
@@ -175,29 +205,49 @@ void *thread_pushUpdate(void *arg)
     int len;
     while (1)
     {
-        // Check if the shared queue is containing some element
-        if (!live_action.empty())
+        // ******* CRITICAL SECTION BEGINS *******
+        pthread_mutex_lock(&live_action_mutex);
+        while (live_action_size == 0)
         {
-            struct action act = live_action.front();
-            live_action.pop();
-            sprintf(buffer, "::PUSH_UPDATE Dequeue Node %d::\n", act.user_id);
+            pthread_cond_wait(&live_action_cond, &live_action_mutex);
+        }
+        live_action_size--;
+        struct action act = live_action.front();
+        live_action.pop();
+        sprintf(buffer, "::PUSH_UPDATE Dequeue Node %-5d::\n", act.user_id);
+        len = sizeof(char) * strlen(buffer);
+        fwrite(buffer, sizeof(char), len, snsfile);
+        pthread_mutex_unlock(&live_action_mutex);
+        // ******* CRITICAL SECTION ENDS *******
+
+        // Add this action to all the neighbours of the node
+        int act_node = act.user_id;
+        for (auto neigh : graph[act_node])
+        {
+            if (nodes[neigh].order == PRIORITY)
+            {
+                act.priority = common_edges[make_pair(act.user_id, neigh)];
+            }
+            // ******* CRITICAL SECTION BEGINS *******
+            pthread_mutex_lock(&feed_queue_mutex[neigh]);
+            nodes[neigh].feed.push(act);
+            sprintf(buffer, "::PUSH_UPDATE Dequeue Node %-5d Neighbour %-5d::\n", act.user_id, neigh);
             len = sizeof(char) * strlen(buffer);
             fwrite(buffer, sizeof(char), len, snsfile);
-            // Add this action to all the neighbours of the node
-            int act_node = act.user_id;
-            for (auto neigh : graph[act_node])
-            {
-                if (nodes[neigh].order == PRIORITY)
-                {
-                    act.priority = common_edges[make_pair(act.user_id, neigh)];
-                }
-                nodes[neigh].feed.push(act); 
-                sprintf(buffer, "::PUSH_UPDATE Dequeue Node %d Neighbour %d::\n", act.user_id, neigh);
-                len = sizeof(char) * strlen(buffer);
-                fwrite(buffer, sizeof(char), len, snsfile);
-            }
+            pthread_mutex_unlock(&feed_queue_mutex[neigh]);
+            // ******* CRITICAL SECTION ENDS *******
+
+            // ******* CRITICAL SECTION BEGINS *******
+            pthread_mutex_lock(&live_neighbour_mutex);
+            // Push the action to live_action queue
+            live_neighbour.push(neigh);
+            live_neighbour_size++;
+            pthread_cond_signal(&live_neighbour_cond);
+            pthread_mutex_unlock(&live_neighbour_mutex);
+            // ******* CRITICAL SECTION ENDS *******
         }
     }
+
     pthread_exit(0);
 }
 
@@ -207,30 +257,58 @@ void *thread_readPost(void *arg)
     int len;
     while (1)
     {
-        for (int i = 0; i < num_nodes; i++)
+        // ******* CRITICAL SECTION BEGINS *******
+        pthread_mutex_lock(&live_neighbour_mutex);
+        while (live_neighbour_size == 0)
         {
-            if(!nodes[i].feed.empty())
-            {
-                sprintf(buffer, "::READ_POST Reading feed queue of %d::\n", i);
-                len = sizeof(char) * strlen(buffer);
-                fwrite(buffer, sizeof(char), len, snsfile);
-                while(!nodes[i].feed.empty())
-                {
-                    action curr_act = nodes[i].feed.top(); 
-                    nodes[i].feed.pop(); 
-                    sprintf(buffer, "::READ_POST I read action number %d of type %d posted by user %d at time %d::\n", curr_act.action_id, curr_act.action_type, curr_act.user_id, (int) curr_act.action_time);
-                    len = sizeof(char) * strlen(buffer);
-                    fwrite(buffer, sizeof(char), len, snsfile);
-                }   
-                break; 
-            }
+            pthread_cond_wait(&live_neighbour_cond, &live_neighbour_mutex);
         }
+        live_neighbour_size--;
+        int neighbour = live_neighbour.front();
+        live_neighbour.pop();
+        pthread_mutex_unlock(&live_neighbour_mutex);
+        // ******* CRITICAL SECTION ENDS *******
+        
+        sprintf(buffer, "::READ_POST Reading feed queue of %-5d::\n", neighbour);
+        len = sizeof(char) * strlen(buffer);
+        fwrite(buffer, sizeof(char), len, snsfile);
+        // ******* CRITICAL SECTION BEGINS *******
+        pthread_mutex_lock(&feed_queue_mutex[neighbour]);
+        while (!nodes[neighbour].feed.empty())
+        {
+            action curr_act = nodes[neighbour].feed.top();
+            nodes[neighbour].feed.pop();
+            sprintf(buffer, "::READ_POST I read action number %-5d of type %-5d posted by user %-5d at time %-10d::\n", curr_act.action_id, curr_act.action_type, curr_act.user_id, (int)curr_act.action_time);
+            len = sizeof(char) * strlen(buffer);
+            fwrite(buffer, sizeof(char), len, snsfile);
+        }
+        pthread_mutex_unlock(&feed_queue_mutex[neighbour]);
+        // ******* CRITICAL SECTION ENDS *******
     }
+
     pthread_exit(0);
 }
 
 int main(int argc, char **argv)
 {
+    // TODO: Check the correctness of this thing
+    // Automatic flush
+    setvbuf(snsfile, NULL, _IONBF, 0);
+
+    // Mutex and Conditional Variable initialisations
+    pthread_mutex_init(&live_action_mutex, NULL);
+    pthread_cond_init(&live_action_cond, NULL);
+    live_action_size = 0;
+    for (int i = 0; i < num_nodes; i++)
+    {
+        pthread_mutex_init(&feed_queue_mutex[i], NULL);
+        pthread_cond_init(&feed_queue_cond[i], NULL);
+        feed_queue_size[i] = 0;
+    }
+    pthread_mutex_init(&live_neighbour_mutex, NULL);
+    pthread_cond_init(&live_neighbour_cond, NULL);
+    live_neighbour_size = 0;
+
     cout << "::MAIN_THREAD_STARTED::" << endl;
 
     // Read the CSV file and load the graph
@@ -277,7 +355,6 @@ int main(int argc, char **argv)
     }
 
     // Spawn the threads and wait for them
-    cout << "Spawning various threads..." << endl;
     pthread_t userSimulator, readPost[NUM_READ_POST_THREAD], pushUpdate[NUM_PUSH_UPDATE_THREAD];
 
     pthread_create(&userSimulator, NULL, *thread_userSimulator, NULL);
@@ -291,7 +368,17 @@ int main(int argc, char **argv)
         pthread_join(readPost[i], NULL);
     for (int i = 0; i < NUM_PUSH_UPDATE_THREAD; i++)
         pthread_join(pushUpdate[i], NULL);
-    cout << "All threads joined.." << endl;
+
+    // Mutex and Conditional Variables Destructions
+    pthread_mutex_destroy(&live_action_mutex);
+    pthread_cond_destroy(&live_action_cond);
+    for (int i = 0; i < num_nodes; i++)
+    {
+        pthread_mutex_destroy(&feed_queue_mutex[i]);
+        pthread_cond_destroy(&feed_queue_cond[i]);
+    }
+    pthread_mutex_destroy(&live_neighbour_mutex);
+    pthread_cond_destroy(&live_neighbour_cond);
 
     return EXIT_SUCCESS;
 }
