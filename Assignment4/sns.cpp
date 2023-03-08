@@ -269,11 +269,11 @@ void *thread_readPost(void *arg)
         pthread_mutex_unlock(&live_neighbour_mutex);
         // ******* CRITICAL SECTION ENDS *******
         
+        // ******* CRITICAL SECTION BEGINS *******
+        pthread_mutex_lock(&feed_queue_mutex[neighbour]);
         sprintf(buffer, "::READ_POST Reading feed queue of %-5d::\n", neighbour);
         len = sizeof(char) * strlen(buffer);
         fwrite(buffer, sizeof(char), len, snsfile);
-        // ******* CRITICAL SECTION BEGINS *******
-        pthread_mutex_lock(&feed_queue_mutex[neighbour]);
         while (!nodes[neighbour].feed.empty())
         {
             action curr_act = nodes[neighbour].feed.top();
