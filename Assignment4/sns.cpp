@@ -1,3 +1,5 @@
+// TODO: Check all critical section codes
+// TODO: Use chrono
 #include <iostream>
 #include <string>
 #include <vector>
@@ -10,6 +12,7 @@
 #include <queue>
 #include <map>
 #include <set>
+#include <chrono> 
 
 using namespace std;
 
@@ -112,6 +115,7 @@ pthread_mutex_t feed_queue_mutex[num_nodes];
 pthread_cond_t feed_queue_cond[num_nodes];
 int feed_queue_size[num_nodes];
 
+set<int> live_current_neighbours; 
 queue<int> live_neighbour;
 pthread_mutex_t live_neighbour_mutex;
 pthread_cond_t live_neighbour_cond;
@@ -217,6 +221,7 @@ void *thread_pushUpdate(void *arg)
         sprintf(buffer, "::PUSH_UPDATE Dequeue Node %-5d::\n", act.user_id);
         len = sizeof(char) * strlen(buffer);
         fwrite(buffer, sizeof(char), len, snsfile);
+        fwrite(buffer, sizeof(char), len, stdout);
         pthread_mutex_unlock(&live_action_mutex);
         // ******* CRITICAL SECTION ENDS *******
 
@@ -234,15 +239,21 @@ void *thread_pushUpdate(void *arg)
             sprintf(buffer, "::PUSH_UPDATE Dequeue Node %-5d Neighbour %-5d::\n", act.user_id, neigh);
             len = sizeof(char) * strlen(buffer);
             fwrite(buffer, sizeof(char), len, snsfile);
+            fwrite(buffer, sizeof(char), len, stdout);
             pthread_mutex_unlock(&feed_queue_mutex[neigh]);
             // ******* CRITICAL SECTION ENDS *******
 
             // ******* CRITICAL SECTION BEGINS *******
             pthread_mutex_lock(&live_neighbour_mutex);
-            // Push the action to live_action queue
-            live_neighbour.push(neigh);
-            live_neighbour_size++;
-            pthread_cond_signal(&live_neighbour_cond);
+            // Push the action to live_neighbour queue
+            // If it is already not present in the queue
+            if(live_current_neighbours.find(neigh) == live_current_neighbours.end())
+            {
+                live_current_neighbours.insert(neigh);
+                live_neighbour.push(neigh);
+                live_neighbour_size++;
+                pthread_cond_signal(&live_neighbour_cond);
+            }
             pthread_mutex_unlock(&live_neighbour_mutex);
             // ******* CRITICAL SECTION ENDS *******
         }
@@ -266,14 +277,16 @@ void *thread_readPost(void *arg)
         live_neighbour_size--;
         int neighbour = live_neighbour.front();
         live_neighbour.pop();
+        live_current_neighbours.erase(neighbour);
         pthread_mutex_unlock(&live_neighbour_mutex);
         // ******* CRITICAL SECTION ENDS *******
-        
+
         // ******* CRITICAL SECTION BEGINS *******
         pthread_mutex_lock(&feed_queue_mutex[neighbour]);
         sprintf(buffer, "::READ_POST Reading feed queue of %-5d::\n", neighbour);
         len = sizeof(char) * strlen(buffer);
         fwrite(buffer, sizeof(char), len, snsfile);
+        fwrite(buffer, sizeof(char), len, stdout);
         while (!nodes[neighbour].feed.empty())
         {
             action curr_act = nodes[neighbour].feed.top();
@@ -281,6 +294,7 @@ void *thread_readPost(void *arg)
             sprintf(buffer, "::READ_POST I read action number %-5d of type %-5d posted by user %-5d at time %-10d::\n", curr_act.action_id, curr_act.action_type, curr_act.user_id, (int)curr_act.action_time);
             len = sizeof(char) * strlen(buffer);
             fwrite(buffer, sizeof(char), len, snsfile);
+            fwrite(buffer, sizeof(char), len, stdout);
         }
         pthread_mutex_unlock(&feed_queue_mutex[neighbour]);
         // ******* CRITICAL SECTION ENDS *******
