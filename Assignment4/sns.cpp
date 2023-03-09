@@ -173,9 +173,9 @@ void *thread_userSimulator(void *arg)
                 // Get the action_id (it is different for each node and each event)
                 act.action_id = nodes[randnode].count_actions[randaction];
                 nodes[randnode].count_actions[randaction]++;
-                // act.action_time = time(0);
-                auto now = chrono::system_clock::now(); 
-                act.action_time = chrono::system_clock::to_time_t(now); 
+                act.action_time = time(0);
+                // auto now = chrono::system_clock::now(); 
+                // act.action_time = chrono::system_clock::to_time_t(now); 
                 if (nodes[randnode].order == CHRONOLOGICAL)
                 {
                     act.priority = act.action_time;
