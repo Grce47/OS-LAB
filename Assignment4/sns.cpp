@@ -1,5 +1,3 @@
-// TODO: Check all critical section codes
-// TODO: Use chrono
 #include <iostream>
 #include <string>
 #include <vector>
