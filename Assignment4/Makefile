@@ -10,6 +10,3 @@ sns.out: sns.cpp
 
 clean: 
 	rm sns.out
-
-	29015
-	32189
