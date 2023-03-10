@@ -48,9 +48,9 @@ void djikstra(vector<vector<int>> &graph, int n, int start, vector<vector<int>> 
 }
 
 void optimizer(vector<vector<int>> &graph, int n, vector<vector<int>> &dist, vector<vector<int>> &parent,int new_n){
-    cout<<"optimizer"<<endl;
     for(int i=0;i<n;i++){
         for(int j=0;j<n;j++){
+            if(i==j) continue;
             for(int k = n - new_n; k < n; k++){
                 if(dist[k][i] != INT_MAX && dist[k][j] != INT_MAX && dist[i][j] > dist[k][i] + dist[k][j]){
                     dist[i][j] = dist[k][i] + dist[k][j];
@@ -59,7 +59,6 @@ void optimizer(vector<vector<int>> &graph, int n, vector<vector<int>> &dist, vec
                         parent[i][cur] = parent[k][cur];
                         cur = parent[k][cur];
                     }
-                    cout<<i<<" "<<j<<endl;
                     cur = i;
                     while(cur != k){
                         parent[i][parent[k][cur]] = cur;
@@ -128,7 +127,6 @@ int main(int argc, char *argv[])
 
             map = (int *)realloc(map, n*(sizeof(int)));
 
-            cout<<*shm_node_list.size<<" "<<idx<<endl;
 
             for (int i = 0; i < *shm_node_list.size; i++)
             {
@@ -221,8 +219,6 @@ int main(int argc, char *argv[])
                 }
             }
 
-            cout<<*shm_node_list.size<<" "<<idx<<endl;
-
             graph.resize(idx);
             dist.resize(idx);
             parent.resize(idx);
@@ -244,7 +240,6 @@ int main(int argc, char *argv[])
                 }
             }
 
-            cout<<'b'<<endl;
 
 
             for (int i = prev_idx; i < idx; i++)
@@ -252,25 +247,26 @@ int main(int argc, char *argv[])
                 djikstra(graph, idx, i, dist, parent);
             }
 
-            cout<<'a'<<endl;
             optimizer(graph, idx, dist, parent, (idx - prev_idx));
+
 
             for (int i = 0; i < idx; i++)
             {
                 for (int j = 0; j < idx; j++)
                 {
                     int cur = j;
-                    if (dist[i][cur] == INT_MAX){
-                        cout<<map[i]<<endl;
+                    if (parent[i][cur] == -1||dist[i][cur] == INT_MAX){
                         continue;
                     }
                     if (j != i)
                     {
                         vector<int> path;
-                        while (parent[i][cur] != cur)
+                        int cnt = 3;
+                        while (parent[i][cur] != cur && cnt != 0)
                         {
                             path.push_back(cur);
                             cur = parent[i][cur];
+                            cnt--;
                         }
                         path.push_back(cur);
                         reverse(path.begin(), path.end());

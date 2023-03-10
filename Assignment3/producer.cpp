@@ -75,9 +75,6 @@ int main()
     Shared_mem_info shm_node_list(200, 201, 202);
     Shared_mem_info shm_edge_list(203, 204, 205);
 
-    cout << (*shm_node_list.capacity) << " " << (*shm_node_list.size) << "\n";
-    cout << (*shm_edge_list.capacity) << " " << (*shm_edge_list.size) << "\n";
-
     node *node_list = shared_memory_init<node>(shm_node_list);
 
     node *edge_list = shared_memory_init<node>(shm_edge_list);
@@ -127,24 +124,7 @@ int main()
                 *shm_edge_list.size = (*shm_edge_list.size) + 2;
             }
         }
-        cout << m << "\n";
-        cout << (*shm_node_list.capacity) << " node " << (*shm_node_list.size) << "\n";
-        cout << (*shm_edge_list.capacity) << " edge " << (*shm_edge_list.size) << "\n";
-        cout << "prod wake\n";
-        sleep(1);
-
-        // for (int i = 0; i < (*shm_node_list.size); i++)
-        // {
-        //     cout << i << " :: ";
-        //     int cur_off = node_list[i].offset;
-        //     while (cur_off != -1)
-        //     {
-        //         cout << edge_list[cur_off].vertex << " ";
-        //         cur_off = edge_list[cur_off].offset;
-        //     }
-        //     cout << "\n";
-        // }
-        // cout << "\n";
+        sleep(50);
     }
 
     shmdt(node_list);
