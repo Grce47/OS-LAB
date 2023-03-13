@@ -13,6 +13,7 @@
 #include <chrono>
 
 using namespace std;
+using namespace std::chrono;
 
 #define PRIORITY 0
 #define CHRONOLOGICAL 1
@@ -28,14 +29,19 @@ const int num_nodes = 37700;
 const string csv_file_path = "musae_git_edges.csv";
 const char *sns_file_path = "sns.log";
 
+uint64_t preciseTime()
+{
+    return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+}
+
 // ACTION STRUCT
 struct action
 {
     int user_id;
     int action_id;
     int action_type;
-    time_t action_time;
-    int priority;
+    uint64_t action_time;
+    uint64_t priority;
 };
 
 // Comparator Class
@@ -70,8 +76,6 @@ public:
         {
             count_actions[i] = 0;
         }
-        int randorder = rand() % 2;
-        order = randorder;
         computed = false;
     }
 };
@@ -120,7 +124,7 @@ int live_neighbour_size;
 // THREAD FUNCTIONS
 void *thread_userSimulator(void *arg)
 {
-    char buffer[100];
+    char buffer[200];
     int len;
     // 100 nodes * n actions then 2 minute sleep
     while (1)
@@ -130,65 +134,74 @@ void *thread_userSimulator(void *arg)
         fwrite(buffer, sizeof(char), len, snsfile);
         fwrite(buffer, sizeof(char), len, stdout);
         // Select 100 random nodes
-        for (int i = 0; i < 100; i++)
+        set<int> selected_nodes;
+        while (1)
         {
-            int randnode = rand() % num_nodes;
-
-            // Do the precomputation for this node
-            if (nodes[randnode].computed == false)
+            if (selected_nodes.size() == 100)
             {
-                for (auto neigh : graph[randnode])
-                {
-                    set<int> common;
-                    for (auto ch : neighbours[randnode])
-                    {
-                        if (neighbours[neigh].count(ch))
-                        {
-                            common.insert(ch);
-                        }
-                    }
-                    common_edges[make_pair(randnode, neigh)] = (int)common.size();
-                    common_edges[make_pair(neigh, randnode)] = (int)common.size();
-                }
-                nodes[randnode].computed = true;
+                break;
             }
-
-            int node_degree = degree[randnode];
-            int proportion_constant = 1;
-            int proportion_value = (int)log2(node_degree);
-            int num_actions = proportion_constant * proportion_value;
-            sprintf(buffer, "::USER_SIMULATOR Random Node %-5d Node Degree %-5d Actions Generated %-5d::\n", randnode, node_degree, num_actions);
-            len = sizeof(char) * strlen(buffer);
-            fwrite(buffer, sizeof(char), len, snsfile);
-            // Each of the num_actions
-            for (int j = 0; j < num_actions; j++)
+            int randnode = rand() % num_nodes;
+            if (selected_nodes.find(randnode) == selected_nodes.end())
             {
-                // Create an action struct
-                int randaction = rand() % NUM_ACTION;
-                struct action act;
-                act.user_id = randnode;
-                act.action_type = randaction;
-                // Get the action_id (it is different for each node and each event)
-                act.action_id = nodes[randnode].count_actions[randaction];
-                nodes[randnode].count_actions[randaction]++;
-                act.action_time = time(0);
-                // auto now = chrono::system_clock::now(); 
-                // act.action_time = chrono::system_clock::to_time_t(now); 
-                if (nodes[randnode].order == CHRONOLOGICAL)
-                {
-                    act.priority = act.action_time;
-                }
-                // Push the action to wall queue of that node
-                nodes[randnode].wall.push(act);
+                selected_nodes.insert(randnode);
 
-                // ******* CRITICAL SECTION BEGINS *******
-                pthread_mutex_lock(&live_action_mutex);
-                // Push the action to live_action queue
-                live_action.push(act);
-                live_action_size++;
-                pthread_cond_signal(&live_action_cond);
-                pthread_mutex_unlock(&live_action_mutex);
-                // ******* CRITICAL SECTION ENDS *******
+                // Do the precomputation for this node
+                if (nodes[randnode].computed == false)
+                {
+                    for (auto neigh : graph[randnode])
+                    {
+                        set<int> common;
+                        for (auto ch : neighbours[randnode])
+                        {
+                            if (neighbours[neigh].count(ch))
+                            {
+                                common.insert(ch);
+                            }
+                        }
+                        common_edges[make_pair(randnode, neigh)] = (int)common.size();
+                        common_edges[make_pair(neigh, randnode)] = (int)common.size();
+                    }
+                    nodes[randnode].computed = true;
+                }
+
+                int node_degree = degree[randnode];
+                int proportion_constant = 1;
+                int proportion_value = (int)log2(node_degree);
+                int num_actions = proportion_constant * proportion_value;
+                sprintf(buffer, "::USER_SIMULATOR Random Node %-5d Node Degree %-5d Actions Generated %-5d::\n", randnode, node_degree, num_actions);
+                len = sizeof(char) * strlen(buffer);
+                fwrite(buffer, sizeof(char), len, snsfile);
+                fwrite(buffer, sizeof(char), len, stdout);
+                // Each of the num_actions
+                for (int j = 0; j < num_actions; j++)
+                {
+                    // Create an action struct
+                    int randaction = rand() % NUM_ACTION;
+                    struct action act;
+                    act.user_id = randnode;
+                    act.action_type = randaction;
+                    // Get the action_id (it is different for each node and each event)
+                    act.action_id = nodes[randnode].count_actions[randaction];
+                    nodes[randnode].count_actions[randaction]++;
+                    // act.action_time = time(0);
+                    act.action_time = preciseTime();
+                    // Push the action to wall queue of that node
+                    nodes[randnode].wall.push(act);
+
+                    // ******* CRITICAL SECTION BEGINS *******
+                    pthread_mutex_lock(&live_action_mutex);
+                    // Push the action to live_action queue
+                    live_action.push(act);
+                    live_action_size++;
+                    sprintf(buffer, "::USER_SIMULATOR Random Node %-5d Action ID %-5d Action Type %-5d Pushed At time %-ld::\n", randnode, act.action_id, act.action_type, act.action_time);
+                    len = sizeof(char) * strlen(buffer);
+                    fwrite(buffer, sizeof(char), len, snsfile);
+                    fwrite(buffer, sizeof(char), len, stdout);
+                    pthread_cond_signal(&live_action_cond);
+                    pthread_mutex_unlock(&live_action_mutex);
+                    // ******* CRITICAL SECTION ENDS *******
+                }
             }
         }
         sprintf(buffer, "::USER_SIMULATOR_SLEEPS::\n");
@@ -203,8 +216,15 @@ void *thread_userSimulator(void *arg)
 
 void *thread_pushUpdate(void *arg)
 {
-    char buffer[100];
+    int *threadId = (int *)arg;
+    char buffer[200];
     int len;
+
+    sprintf(buffer, "::PUSH_UPDATE_WAKES TID %-3d::\n", *threadId);
+    len = sizeof(char) * strlen(buffer);
+    fwrite(buffer, sizeof(char), len, snsfile);
+    fwrite(buffer, sizeof(char), len, stdout);
+
     while (1)
     {
         // ******* CRITICAL SECTION BEGINS *******
@@ -216,7 +236,7 @@ void *thread_pushUpdate(void *arg)
         live_action_size--;
         struct action act = live_action.front();
         live_action.pop();
-        sprintf(buffer, "::PUSH_UPDATE Dequeue Node %-5d::\n", act.user_id);
+        sprintf(buffer, "::PUSH_UPDATE Tid %-3d Dequeue Node %-5d::\n", *threadId, act.user_id);
         len = sizeof(char) * strlen(buffer);
         fwrite(buffer, sizeof(char), len, snsfile);
         fwrite(buffer, sizeof(char), len, stdout);
@@ -231,10 +251,14 @@ void *thread_pushUpdate(void *arg)
             {
                 act.priority = common_edges[make_pair(act.user_id, neigh)];
             }
+            else
+            {
+                act.priority = act.action_time;
+            }
             // ******* CRITICAL SECTION BEGINS *******
             pthread_mutex_lock(&feed_queue_mutex[neigh]);
             nodes[neigh].feed.push(act);
-            sprintf(buffer, "::PUSH_UPDATE Dequeue Node %-5d Neighbour %-5d::\n", act.user_id, neigh);
+            sprintf(buffer, "::PUSH_UPDATE Tid %-3d Dequeue Node %-5d Neighbour %-5d::\n", *threadId, act.user_id, neigh);
             len = sizeof(char) * strlen(buffer);
             fwrite(buffer, sizeof(char), len, snsfile);
             fwrite(buffer, sizeof(char), len, stdout);
@@ -257,8 +281,15 @@ void *thread_pushUpdate(void *arg)
 
 void *thread_readPost(void *arg)
 {
-    char buffer[100];
+    int *threadId = (int *)arg;
+    char buffer[200];
     int len;
+
+    sprintf(buffer, "::READ_POST_WAKES TID %-3d::\n", *threadId);
+    len = sizeof(char) * strlen(buffer);
+    fwrite(buffer, sizeof(char), len, snsfile);
+    fwrite(buffer, sizeof(char), len, stdout);
+
     while (1)
     {
         // ******* CRITICAL SECTION BEGINS *******
@@ -275,15 +306,11 @@ void *thread_readPost(void *arg)
 
         // ******* CRITICAL SECTION BEGINS *******
         pthread_mutex_lock(&feed_queue_mutex[neighbour]);
-        sprintf(buffer, "::READ_POST Reading feed queue of %-5d::\n", neighbour);
-        len = sizeof(char) * strlen(buffer);
-        fwrite(buffer, sizeof(char), len, snsfile);
-        fwrite(buffer, sizeof(char), len, stdout);
         while (!nodes[neighbour].feed.empty())
         {
             action curr_act = nodes[neighbour].feed.top();
             nodes[neighbour].feed.pop();
-            sprintf(buffer, "::READ_POST I read action number %-5d of type %-5d posted by user %-5d at time %-10d::\n", curr_act.action_id, curr_act.action_type, curr_act.user_id, (int)curr_act.action_time);
+            sprintf(buffer, "::READ_POST Tid %-3d I read action number %-5d of type %-5d and priority %-15ld posted by user %-5d for node %-5d of order %-2d at time %ld::\n", *threadId, curr_act.action_id, curr_act.action_type, curr_act.priority, curr_act.user_id, neighbour, nodes[neighbour].order, curr_act.action_time);
             len = sizeof(char) * strlen(buffer);
             fwrite(buffer, sizeof(char), len, snsfile);
             fwrite(buffer, sizeof(char), len, stdout);
@@ -359,14 +386,27 @@ int main(int argc, char **argv)
         }
     }
 
+    // Set order of each nodes
+    for (int i = 0; i < num_nodes; i++)
+    {
+        nodes[i].order = rand() % 2;
+    }
+
     // Spawn the threads and wait for them
     pthread_t userSimulator, readPost[NUM_READ_POST_THREAD], pushUpdate[NUM_PUSH_UPDATE_THREAD];
 
     pthread_create(&userSimulator, NULL, *thread_userSimulator, NULL);
+    int tids[100];
+    for (int i = 0; i < 100; i++)
+        tids[i] = i;
     for (int i = 0; i < NUM_READ_POST_THREAD; i++)
-        pthread_create(&readPost[i], NULL, *thread_readPost, NULL);
+    {
+        pthread_create(&readPost[i], NULL, *thread_readPost, (void *)&tids[i]);
+    }
     for (int i = 0; i < NUM_PUSH_UPDATE_THREAD; i++)
-        pthread_create(&pushUpdate[i], NULL, *thread_pushUpdate, NULL);
+    {
+        pthread_create(&pushUpdate[i], NULL, *thread_pushUpdate, (void *)&tids[i]);
+    }
 
     pthread_join(userSimulator, NULL);
     for (int i = 0; i < NUM_READ_POST_THREAD; i++)
