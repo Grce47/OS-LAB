@@ -18,4 +18,4 @@ lock: lock.c
 install:
 	sudo apt-get install libreadline6-dev
 clean: 
-	sudo rm malware.out a.out sb pwd delep lock /usr/local/bin/delep /usr/local/bin/pwd
+	sudo rm malware.out a.out sb pwd delep lock /usr/local/bin/delep /usr/local/bin/pwd lock_test.txt 
