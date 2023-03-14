@@ -1,6 +1,7 @@
 {
   "files.associations": {
     "iostream": "c",
-    "iosfwd": "c"
+    "iosfwd": "c",
+    "chrono": "cpp"
   }
 }
