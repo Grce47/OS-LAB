@@ -1,0 +1,5 @@
+mulitset -> n ele -> 00000000s
+guest_tread -> check smallest value -> waiting 
+                                    -> else lock -> begin change (signal if current is +ve) -> unlock -> room mil gaya -> sem_wait(t) -> if not interrupt -> change multiset
+                                                                                                           -> sem_value++
+who signal?
