@@ -9,6 +9,7 @@
 #include <semaphore.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <fstream>
 
 using namespace std;
 
@@ -21,9 +22,11 @@ class Guest
 {
 public:
     int priority;
-    Guest(int _prior)
+    int id;
+    Guest(int _prior, int _id)
     {
         priority = _prior;
+        id = _id;
     }
 };
 
@@ -39,6 +42,7 @@ public:
         number_of_guests = 0;
         previous_guest_time = 0;
         guest = NULL;
+        cleaned = true;
     }
 };
 
@@ -52,14 +56,7 @@ vector<Guest> guests;
 multiset<pair<int, int>> room_priority_queue;
 int uncleaned_rooms;
 int room_full;
-void display()
-{
-    cout << "Priority | Room" << endl;
-    for (auto &ele : room_priority_queue)
-    {
-        cout << ele.first << "\t\t\t" << ele.second << endl;
-    }
-}
+ofstream out;
 
 void *guest_thread(void *args)
 {
@@ -85,22 +82,17 @@ void *guest_thread(void *args)
             pthread_cond_wait(&cond_id, &mutex_id);
         }
         int room_no = room_priority_queue.begin()->second;
-        cout << endl
-             << "Starting queue" << endl;
-        display();
-        cout << "THIS GUEST IS " << guest->priority << endl;
-        cout << "About to get ROOM = " << room_no << " GUEST with Priority = " << guest->priority << endl;
 
         rooms[room_no].number_of_guests++;
-
-        cout << "We are Removing " << room_priority_queue.begin()->first << " from room number = " << room_no << " and ";
-        cout << "ADDing " << guest->priority << " from room number = " << room_no << endl;
 
         if (room_priority_queue.begin()->first != 0)
         {
             // intterupt signal
-            cout << "(because queue.first.priority != 0) SEM_POST = " << room_priority_queue.begin()->first << " FROM " << guest->priority << endl;
-            sem_post(&sem_id[room_no]);
+            Guest *guest_ = rooms[room_no].guest;
+            sem_post(&sem_id[guest_->id]);
+            out<<"Removing the Guest: "<<guest_->id<<" with priority "<<room_priority_queue.begin()->first<<" from Room "<<room_no<<" and "<<"Adding the guest: "<<guest_index<<" with priority "<<guest->priority<<endl;
+        }else{
+            out<<"Adding the Guest: "<<guest_index<<" with priority "<<guest->priority<<" to the empty room "<<room_no<<endl;
         }
 
         room_priority_queue.erase(room_priority_queue.begin());
@@ -113,33 +105,29 @@ void *guest_thread(void *args)
             room_priority_queue.insert(make_pair(y + 1, room_no));
         }
 
-        cout << "After Erasing and inserting" << endl;
-        display();
-        cout << endl;
-
         rooms[room_no].guest = guest;
-
-        pthread_cond_broadcast(&cond_id);
-        pthread_mutex_unlock(&mutex_id);
 
         int random_number = get_random(10, 30);
         struct timespec sleep_time;
         clock_gettime(CLOCK_REALTIME, &sleep_time);
         sleep_time.tv_sec += random_number;
 
-        int res = sem_timedwait(&sem_id[room_no], &sleep_time);
+        pthread_mutex_unlock(&mutex_id);
+        pthread_cond_broadcast(&cond_id);
+
+        int res = -1;
+        res = sem_timedwait(&sem_id[guest->id], &sleep_time);
 
         pthread_mutex_lock(&mutex_id);
         if (res == 0)
         {
             // interrupt
             // do nothing
-            cout << "GOT INTERRUPT " << guest->priority << " " << endl;
         }
         else
         {
             // not interrupt
-            cout << "Peace REM " << guest->priority << " " << room_no << " ADD " << 0 << " " << room_no << endl;
+            out<< "Guest: "<<guest_index<<" with priority: "<<guest->priority<<" left the room: "<<room_no<<" after compeleting its stay"<<endl;
             if (rooms[room_no].number_of_guests < 2)
             {
                 room_priority_queue.erase(room_priority_queue.find(make_pair(guest->priority, room_no)));
@@ -159,8 +147,8 @@ void *guest_thread(void *args)
             rooms[room_no].previous_guest_time += random_number;
         }
 
-        pthread_cond_broadcast(&cond_id);
         pthread_mutex_unlock(&mutex_id);
+        pthread_cond_broadcast(&cond_id);
     }
     pthread_exit(0);
 }
@@ -182,7 +170,7 @@ void *cleaning_staff_thread(void *args)
         int select_idx = idx[get_random(0, idx.size() - 1)];
         Room *selected_room = &rooms[select_idx];
         selected_room->cleaned = true;
-        cout<<"Cleaning Room No. "<<select_idx<<endl;
+        out<<"Cleaning Room No. "<<select_idx<<endl;
         sem_post(&sem_cleaner);
 
         // do cleaning
@@ -222,28 +210,35 @@ int main()
     pthread_cond_init(&cond_id, NULL);
     pthread_cond_init(&cleaner_cond, NULL);
     time(NULL);
-    cin >> x >> y >> n;
+    cout<<"Enter the number of cleaners: ";
+    cin>>x;
+    cout<<"Enter the number of guests: ";
+    cin>>y;
+    cout<<"Enter the number of rooms: ";
+    cin>>n;
+
+    out.open("sns.log");
     if (!(y > n && n > x && x > 1))
     {
         cerr << "Wrong Constraints\n";
         exit(EXIT_FAILURE);
     }
 
-    for (int i = 1; i <= y; i++)
-    {
-        Guest guest(i);
-        guests.emplace_back(guest);
-    }
+    // for (int i = 1; i <= y; i++)
+    // {
+    //     Guest guest(get_random(1,y), i);
+    //     guests.emplace_back(guest);
+    // }
 
     rooms = new Room[n]();
     guest_tid = new pthread_t[y];
     staff_tid = new pthread_t[x];
-    sem_id = new sem_t[n];
+    sem_id = new sem_t[y];
 
     sem_init(&sem_cleaner, 0, 1);
     sem_init(&sem_clean_wait, 0, 0);
 
-    for (int i = 0; i < n; i++)
+    for (int i = 0; i < y; i++)
         sem_init(&sem_id[i], 0, 0);
 
     for (int i = 0; i < n; i++)
@@ -251,10 +246,9 @@ int main()
 
     for (int i = 0; i < y; i++)
     {
-        Guest guest(i + 1);
+        Guest guest(i + 1, i);
         guests.push_back(guest);
     }
-    display();
     for (int i = 0; i < y; i++)
         pthread_create(&guest_tid[i], NULL, guest_thread, (void *)(&guest_tid[i]));
     for (int i = 0; i < x; i++)
