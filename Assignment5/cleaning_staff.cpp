@@ -27,7 +27,6 @@ void *cleaning_staff_thread(void *args)
         sem_wait(&sem_cleaner);
         uncleaned_rooms--;
         if(uncleaned_rooms == 0){
-            room_full = 0;
             auto itr = room_priority_queue.end();
             itr--;
             while (itr->first == y+1)

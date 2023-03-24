@@ -50,6 +50,7 @@ void *guest_thread(void *args)
         int random_number = get_random(10, 30);
         struct timespec sleep_time;
         clock_gettime(CLOCK_REALTIME, &sleep_time);
+        int time = sleep_time.tv_sec;
         sleep_time.tv_sec += random_number;
 
         pthread_mutex_unlock(&mutex_id);
@@ -63,6 +64,7 @@ void *guest_thread(void *args)
         {
             // interrupt
             // do nothing
+            rooms[room_no].previous_guest_time += (sleep_time.tv_sec - time);
         }
         else
         {

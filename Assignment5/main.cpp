@@ -49,13 +49,12 @@ public:
 int x, y, n;
 Room *rooms;
 sem_t *sem_id, sem_cleaner, sem_clean_wait;
-pthread_mutex_t mutex_id, cleaner_lock;
-pthread_cond_t cond_id, cleaner_cond;
+pthread_mutex_t mutex_id;
+pthread_cond_t cond_id;
 pthread_t *guest_tid, *staff_tid;
 vector<Guest> guests;
 multiset<pair<int, int>> room_priority_queue;
 int uncleaned_rooms;
-int room_full;
 ofstream out;
 
 #include "guest.cpp"
@@ -63,12 +62,9 @@ ofstream out;
 
 int main()
 {
-    room_full = 0;
     uncleaned_rooms = 0;
     pthread_mutex_init(&mutex_id, NULL);
-    pthread_mutex_init(&cleaner_lock, NULL);
     pthread_cond_init(&cond_id, NULL);
-    pthread_cond_init(&cleaner_cond, NULL);
     time(NULL);
     cout<<"Enter the number of cleaners: ";
     cin>>x;
