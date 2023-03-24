@@ -13,16 +13,20 @@
 
 using namespace std;
 
+// returns a random number between l, r
 int get_random(int l, int r)
 {
     return l + (rand() % (r - l + 1));
 }
 
+// Class of guest
 class Guest
 {
 public:
-    int priority;
-    int id;
+    int priority; // stores priority of guest
+    int id;         // stores id of guest
+
+    // constructor of guest
     Guest(int _prior, int _id)
     {
         priority = _prior;
@@ -30,13 +34,15 @@ public:
     }
 };
 
+
+// Room Class
 class Room
 {
 public:
-    Guest *guest;
-    int previous_guest_time;
-    int number_of_guests;
-    bool cleaned;
+    Guest *guest; // pointer to guest which has occupied the room
+    int previous_guest_time; // stores the time for which room was occupied
+    int number_of_guests; // stores the number of guests who stayd in the room
+    bool cleaned;   // stores whether room is cleaned or not
     Room()
     {
         number_of_guests = 0;
@@ -56,12 +62,15 @@ vector<Guest> guests;
 multiset<pair<int, int>> room_priority_queue;
 int uncleaned_rooms;
 ofstream out;
-
+ // including guest thread
 #include "guest.cpp"
+
+// including cleaner thread
 #include "cleaning_staff.cpp"
 
 int main()
 {
+    // intializing all the vriables
     uncleaned_rooms = 0;
     pthread_mutex_init(&mutex_id, NULL);
     pthread_cond_init(&cond_id, NULL);
@@ -105,6 +114,8 @@ int main()
         Guest guest(i + 1, i);
         guests.push_back(guest);
     }
+
+    // creating all the threads
     for (int i = 0; i < y; i++)
         pthread_create(&guest_tid[i], NULL, guest_thread, (void *)(&guest_tid[i]));
     for (int i = 0; i < x; i++)

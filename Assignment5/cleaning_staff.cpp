@@ -8,6 +8,8 @@ void *cleaning_staff_thread(void *args)
         // select room
         sem_wait(&sem_cleaner);
         vector<int> idx;
+
+        // selecting a random room to clean
         for (int i = 0; i < n; i++)
             if (!rooms[i].cleaned)
                 idx.push_back(i);
@@ -26,6 +28,8 @@ void *cleaning_staff_thread(void *args)
 
         sem_wait(&sem_cleaner);
         uncleaned_rooms--;
+
+        // when all the room have cleaned signalling the guest threads
         if(uncleaned_rooms == 0){
             auto itr = room_priority_queue.end();
             itr--;

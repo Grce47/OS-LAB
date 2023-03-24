@@ -1,5 +1,6 @@
 void *guest_thread(void *args)
 {
+    // finding the guest id
     int guest_index = -1;
     for (int i = 0; i < y; i++)
     {
@@ -13,10 +14,13 @@ void *guest_thread(void *args)
     Guest *guest = &guests[guest_index];
     while (1)
     {
+        // sleeping for random time
         sleep(get_random(10, 20));
 
+        // acquiring the lock
         pthread_mutex_lock(&mutex_id);
 
+        // waiting while a room is found
         while (room_priority_queue.begin()->first >= guest->priority)
         {
             pthread_cond_wait(&cond_id, &mutex_id);
@@ -25,6 +29,7 @@ void *guest_thread(void *args)
 
         rooms[room_no].number_of_guests++;
 
+        // sending the signal to lower priority guest who have already occupied the room
         if (room_priority_queue.begin()->first != 0)
         {
             // intterupt signal
@@ -35,6 +40,7 @@ void *guest_thread(void *args)
             out<<"Adding the Guest: "<<guest_index<<" with priority "<<guest->priority<<" to the empty room "<<room_no<<endl;
         }
 
+        // updating the priority queue
         room_priority_queue.erase(room_priority_queue.begin());
         if (rooms[room_no].number_of_guests < 2)
         {
@@ -56,6 +62,7 @@ void *guest_thread(void *args)
         pthread_mutex_unlock(&mutex_id);
         pthread_cond_broadcast(&cond_id);
 
+        // sleeing in the room for specified time
         int res = -1;
         res = sem_timedwait(&sem_id[guest->id], &sleep_time);
 
@@ -63,12 +70,12 @@ void *guest_thread(void *args)
         if (res == 0)
         {
             // interrupt
-            // do nothing
             rooms[room_no].previous_guest_time += (sleep_time.tv_sec - time);
         }
         else
         {
             // not interrupt
+            // leaving the room without interrupt
             out<< "Guest: "<<guest_index<<" with priority: "<<guest->priority<<" left the room: "<<room_no<<" after compeleting its stay"<<endl;
             if (rooms[room_no].number_of_guests < 2)
             {
